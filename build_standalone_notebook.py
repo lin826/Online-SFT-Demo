@@ -63,7 +63,7 @@ def _font(size, bold=False):
 
 FONTS = {
     "title": _font(34, True),
-    "heading": _font(19, True),
+    "heading": _font(17, True),
     "body": _font(16),
     "body_bold": _font(16, True),
     "small": _font(13),
@@ -250,8 +250,8 @@ def _draw_frame(progress):
         dot_x = centers[-1][0]
     draw.ellipse((dot_x - 7, 121, dot_x + 7, 135), fill=PALETTE["blue"])
 
-    titles = ("1  CONTEXT", "2  STUDENT", "3  COMMIT + SCORE",
-              "4  FEEDBACK", "5  TEACHER + UPDATE")
+    titles = ("1 CONTEXT", "2 STUDENT", "3 COMMIT + SCORE",
+              "4 FEEDBACK", "5 TEACH + UPDATE")
     renderers = (_draw_context, _draw_student, _draw_commit, _draw_feedback, _draw_teacher)
     for index, box in enumerate(cards):
         if index < current:
