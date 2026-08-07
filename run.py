@@ -1,16 +1,7 @@
-"""Reproduce the whole showcase in one command:  python run.py
+"""Reproduce the primary 20-seed Online-SDFT contextual-bandit benchmark."""
 
-Runs the causal ZS / ICL / RAG baselines (with both k sweeps), then the online
-SFT loop, then draws every figure. Roughly 15 minutes on an M-series Mac (MPS)
-or any CUDA GPU; CPU works but is slow. Offline after the first model download.
+from bandit_experiment import main
 
-Outputs: outputs/results.json, outputs/perf.json, the trained adapter, figures/*.png.
-"""
 
-import draw_loop_diagram
-import run_baselines
-import run_sft
-
-run_baselines.main()
-run_sft.main()
-draw_loop_diagram.main()
+if __name__ == "__main__":
+    main(seeds=20)

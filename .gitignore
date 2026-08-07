@@ -17,6 +17,14 @@ venv/
 
 # Run outputs (adapters, JSON results, targets)
 outputs/
+!outputs/
+outputs/*
+!outputs/bandit/
+!outputs/bandit/rollouts.jsonl
+!outputs/bandit/learning_curves.csv
+!outputs/bandit/per_seed_metrics.csv
+!outputs/bandit/summary.json
+!outputs/bandit/qualitative_examples.json
 
 # Local-only hyperparameter / schedule sweeps (not part of the demo)
 sweep_*.py
