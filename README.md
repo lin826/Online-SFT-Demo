@@ -26,6 +26,16 @@ Mean over 20 paired 240-event streams; `±` is a 95% confidence interval.
 | [Results and reproduction](docs/results.md) | Protocol, plots, commands, notebook, and artifacts |
 | [Blog draft](BLOG.md) | An accessible narrative about continual, on-device learning and Online-SDFT |
 
+## Repository map
+
+| Path | Purpose |
+| --- | --- |
+| [`run.py`](run.py) | The supported experiment entry point |
+| [`bandit_experiment.py`](bandit_experiment.py) | Simulator, five methods, online evaluation, and plots |
+| [`online_sdft_bandit_demo.ipynb`](online_sdft_bandit_demo.ipynb) | Self-contained walkthrough and playable game |
+| [`build_standalone_notebook.py`](build_standalone_notebook.py) | Rebuilds the notebook and process GIF |
+| [`tests/test_bandit_experiment.py`](tests/test_bandit_experiment.py) | Causal-feedback invariants |
+
 ## Quick start
 
 ```bash

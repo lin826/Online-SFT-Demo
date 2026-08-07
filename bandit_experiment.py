@@ -13,7 +13,6 @@ Outputs:
   outputs/bandit/qualitative_examples.json
   figures/bandit_accuracy.png
   figures/bandit_learning_curves.png
-  figures/bandit_action_feedback.png
 """
 
 from __future__ import annotations
@@ -340,7 +339,7 @@ def mean_ci(values: list[float]) -> dict:
             "ci95": float(1.96 * a.std(ddof=1) / math.sqrt(len(a)))}
 
 
-def write_figures(summary: dict, curves: list[dict], rollouts: list[dict]) -> None:
+def write_figures(summary: dict, curves: list[dict]) -> None:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -409,22 +408,6 @@ def write_figures(summary: dict, curves: list[dict], rollouts: list[dict]) -> No
     fig.savefig(FIG / "bandit_learning_curves.png", dpi=170, bbox_inches="tight")
     plt.close(fig)
 
-    counts = {m: Counter(r["action"] for r in rollouts if r["method"] == m)
-              for m in METHODS}
-    fig, ax = plt.subplots(figsize=(9.2, 4.3))
-    bottom = np.zeros(len(METHODS))
-    action_colors = {"INTERRUPT": "#d93025", "LATER": "#e8710a", "ARCHIVE": "#5f6368"}
-    for action in ACTIONS:
-        vals = np.array([counts[m][action] for m in METHODS])
-        ax.bar(METHODS, vals, bottom=bottom, label=action, color=action_colors[action])
-        bottom += vals
-    ax.set(title="Factual actions executed across all seeds", ylabel="Decisions")
-    ax.legend(ncol=3)
-    ax.grid(axis="y", alpha=0.2)
-    fig.tight_layout()
-    fig.savefig(FIG / "bandit_action_feedback.png", dpi=170, bbox_inches="tight")
-    plt.close(fig)
-
 
 def main(seeds: int = 20) -> None:
     OUT.mkdir(parents=True, exist_ok=True)
@@ -490,7 +473,7 @@ def main(seeds: int = 20) -> None:
                            "learning_signal": "teacher rollouts only; oracle scoring only"},
                "summary": summary, "qualitative_examples": len(qualitative)}
     (OUT / "summary.json").write_text(json.dumps(payload, indent=2) + "\n")
-    write_figures(summary, curves, rollouts)
+    write_figures(summary, curves)
     print("wrote experiment artifacts to", OUT)
 
 

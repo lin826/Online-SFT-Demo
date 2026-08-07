@@ -49,10 +49,10 @@ The [self-contained notebook](../online_sdft_bandit_demo.ipynb) embeds the simul
 
 | Path | Contents |
 | --- | --- |
-| `outputs/bandit/rollouts.jsonl` | Every action, factual outcome, teacher distribution, and score |
-| `outputs/bandit/learning_curves.csv` | Per-step accuracy and regret |
 | `outputs/bandit/per_seed_metrics.csv` | One final row per method and seed |
 | `outputs/bandit/summary.json` | Aggregate means and confidence intervals |
 | `outputs/bandit/qualitative_examples.json` | Later-stream SDFT wins |
+| `outputs/bandit/rollouts.jsonl` | Generated locally: every action, factual outcome, teacher distribution, and score |
+| `outputs/bandit/learning_curves.csv` | Generated locally: per-step accuracy and regret |
 
-For the formal specification and limitations, see the [technical report](../TECHNICAL_REPORT.md).
+Only the three compact result files are versioned. The two larger audit files are reproducible with `python run.py` and ignored by Git.
