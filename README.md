@@ -2,6 +2,8 @@
 
 An online contextual-bandit demo for routing notifications as `INTERRUPT`, `LATER`, or `ARCHIVE`. The agent acts before feedback, learns only from the selected action's factual outcome, and is scored on the same drifting stream—there is no train/test split.
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/lin826/Online-SFT-Demo/blob/main/online_sdft_bandit_demo.ipynb)
+
 ![Online-SDFT causal interaction](figures/online_sdft_process.gif)
 
 ## Headline result
@@ -44,4 +46,4 @@ python -m venv .venv
 .venv/bin/python run.py
 ```
 
-[Open the self-contained notebook](online_sdft_bandit_demo.ipynb) or [launch it in Colab](https://colab.research.google.com/github/lin826/Online-SFT-Demo/blob/main/online_sdft_bandit_demo.ipynb).
+[View the self-contained notebook on GitHub](online_sdft_bandit_demo.ipynb).
