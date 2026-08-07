@@ -70,6 +70,104 @@ $$
 R_T=\sum_{t=1}^{T} r_t.
 $$
 
+### Exact implementation pseudocode
+
+The calculation is split into a simulator-only utility function, the prequential interaction loop, and the across-seed aggregator. The corresponding Python is [`oracle_utilities`](bandit_experiment.py#L141-L152), the [score-before-feedback loop](bandit_experiment.py#L272-L290), the [post-feedback update](bandit_experiment.py#L289-L320), the [per-stream exports](bandit_experiment.py#L322-L340), and the [20-seed aggregation](bandit_experiment.py#L429-L458).
+
+First, the evaluator computes all three expected utilities from the generated event. Let `I`, `D`, `F`, and `B` denote importance, deadline pressure, affinity, and latent busyness; let `C`, `M`, and `S` indicate an on-call incident, manager-focus context, and off-hours social context. This is an exact transcription of [`oracle_utilities`](bandit_experiment.py#L141-L152):
+
+```text
+FUNCTION ORACLE_UTILITIES(event):
+    I ← event.importance
+    D ← event.deadline
+    F ← event.affinity
+    H ← event.z                              # privileged simulator metadata
+    B ← H["busy"]
+    C ← H["incident_on_call"]
+    M ← H["manager_focus"]
+    S ← H["leisure_social"]
+    U ← I × D                              # urgency
+
+    μ[INTERRUPT] ← 1.45×U + 0.42×F - 1.20×B
+                   + 1.00×C + 0.60×M + 0.50×S
+
+    μ[LATER]     ← 0.72×I + 0.58×F - 0.62×U
+                   + 0.22×B - 0.62×C
+
+    μ[ARCHIVE]   ← 0.72×(1-I) + 0.36×(1-F)
+                   - 0.80×U - 0.50×S
+
+    RETURN μ
+```
+
+Those values are never inserted into the policy prompt, memory, teacher input, or gradient batch. They remain inside the evaluator. The complete per-method, per-seed loop is:
+
+```text
+FUNCTION RUN_ONE_STREAM(method, policy, events, seed):
+    cumulative_regret ← 0
+    cumulative_correct ← 0
+
+    FOR t, event IN events IN ARRIVAL ORDER:
+        # 1. Student acts using x_t and past information only.
+        p_t ← METHOD_PROBABILITIES(method, policy, event.x, past_memory)
+        greedy ← ONE_HOT(ARGMAX(p_t))
+        behavior ← (1 - 0.06) × greedy + 0.06 / |ACTIONS|
+        a_t ← SAMPLE_CATEGORICAL(behavior)
+
+        # 2. Evaluator freezes and scores that committed action.
+        #    No factual outcome has been sampled yet.
+        μ_t ← ORACLE_UTILITIES(event)       # evaluator-only hidden state
+        a_t_star ← ARGMAX_a μ_t[a]
+        r_t ← μ_t[a_t_star] - μ_t[a_t]
+        correct_t ← 1 IF a_t = a_t_star ELSE 0
+
+        cumulative_regret ← cumulative_regret + r_t
+        cumulative_correct ← cumulative_correct + correct_t
+        LOG(t, a_t, r_t, cumulative_regret,
+            cumulative_correct / t, a_t_star AS scoring_only)
+
+        # 3. Only now execute a_t and reveal its factual consequence.
+        feedback_t ← EXECUTE_SELECTED_ACTION_ONLY(event, a_t)
+        q_t ← TEACHER_POLICY(event, a_t, feedback_t)
+        teacher_action_t ← SAMPLE_CATEGORICAL(q_t)
+        APPEND(past_memory, event.x, teacher_action_t, feedback_t)
+
+        # 4. Update only for future rounds; the score at t is immutable.
+        IF method = Online-SFT:
+            target ← ONE_HOT(teacher_action_t)
+        ELSE IF method = Online-SDFT:
+            target ← q_t
+
+        IF method IN [Online-SFT, Online-SDFT]:
+            APPEND(replay, (event.x, target))
+            KEEP_ONLY_MOST_RECENT_24(replay)
+            batch ← [fresh replay item]
+                    + RANDOM_SAMPLE(up to 3 older replay items)
+            UPDATE(policy, batch)
+
+    RETURN cumulative_regret,
+           cumulative_correct / NUMBER_OF_EVENTS,
+           cumulative_regret / NUMBER_OF_EVENTS
+```
+
+The critical ordering—sample action, compute regret, then obtain feedback—is enforced directly at [`bandit_experiment.py` lines 272–320](bandit_experiment.py#L272-L320). The output stores `step_regret` and `cum_regret` before any update can affect the next action.
+
+Finally, `main` constructs one 240-event stream per seed and reuses those contexts for every method, giving paired comparisons. It summarizes the 20 final stream regrets as follows:
+
+```text
+FOR seed IN 0, 1, ..., 19:
+    stream ← MAKE_STREAM(seed)
+    FOR method IN [Base, ICL, RAG, Online-SFT, Online-SDFT]:
+        R[method, seed] ← RUN_ONE_STREAM(method, fresh_policy, stream, seed).regret
+
+FOR method:
+    mean_regret[method] ← MEAN(R[method, 0:20])
+    sample_std[method]  ← STD_WITH_DDOF_1(R[method, 0:20])
+    ci95[method]        ← 1.96 × sample_std[method] / SQRT(20)
+```
+
+This matches [`main`](bandit_experiment.py#L429-L458) and [`mean_ci`](bandit_experiment.py#L337-L340). Each method's exploration actions and early mistakes stay in its own $R_{240}$; nothing is discarded or rescored.
+
 ### Concrete example
 
 For the first weekday event in seed 0, the Base policy chose `INTERRUPT`. The simulator's sealed expected utilities were:
