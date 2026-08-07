@@ -297,6 +297,127 @@ def make_online_sdft_gif():
 '''.strip()
 
 
+GAME_ENGINE = r'''
+import random
+from IPython.display import Markdown, display
+
+GAME_ACTIONS = ("INTERRUPT", "LATER", "ARCHIVE")
+GAME_SCENARIOS = (
+    {
+        "name": "Afternoon calendar alert",
+        "category": "calendar", "time": "15:00",
+        "importance": 0.88, "deadline": 0.94, "affinity": 0.45,
+        "busy": 0.88, "incident": 0.0, "manager": 0.0, "social": 0.0,
+        "seed": 7,
+    },
+    {
+        "name": "On-call monitoring incident",
+        "category": "monitoring", "time": "02:10",
+        "importance": 0.82, "deadline": 0.90, "affinity": 0.25,
+        "busy": 0.30, "incident": 1.0, "manager": 0.0, "social": 0.0,
+        "seed": 11,
+    },
+    {
+        "name": "Off-hours message from a close friend",
+        "category": "social", "time": "20:30",
+        "importance": 0.22, "deadline": 0.08, "affinity": 0.85,
+        "busy": 0.15, "incident": 0.0, "manager": 0.0, "social": 1.0,
+        "seed": 19,
+    },
+    {
+        "name": "Late-morning promotion",
+        "category": "promo", "time": "11:20",
+        "importance": 0.08, "deadline": 0.03, "affinity": 0.15,
+        "busy": 0.55, "incident": 0.0, "manager": 0.0, "social": 0.0,
+        "seed": 23,
+    },
+)
+
+
+def _game_utilities(scenario):
+    importance = scenario["importance"]
+    affinity = scenario["affinity"]
+    urgency = importance * scenario["deadline"]
+    interrupt = (1.45 * urgency + 0.42 * affinity - 1.20 * scenario["busy"]
+                 + 1.00 * scenario["incident"] + 0.60 * scenario["manager"]
+                 + 0.50 * scenario["social"])
+    later = (0.72 * importance + 0.58 * affinity - 0.62 * urgency
+             + 0.22 * scenario["busy"] - 0.62 * scenario["incident"])
+    archive = (0.72 * (1 - importance) + 0.36 * (1 - affinity)
+               - 0.80 * urgency - 0.50 * scenario["social"])
+    return (interrupt, later, archive)
+
+
+def _execute_game_action(scenario, action_index, selected_utility):
+    rng = random.Random(scenario["seed"])
+    draw = rng.random()
+    engage_p = max(0.04, min(0.92, 0.36 + 0.24 * selected_utility))
+    if action_index == 0:
+        outcome = ("OPENED_PUSH" if draw < engage_p else
+                   "DISMISSED_PUSH" if draw < engage_p + 0.45 else "IGNORED_PUSH")
+        reward = {"OPENED_PUSH": 0.72, "DISMISSED_PUSH": -0.58,
+                  "IGNORED_PUSH": -0.78}[outcome] - 0.30 * scenario["busy"]
+    elif action_index == 1:
+        outcome = "OPENED_DIGEST" if draw < engage_p else "IGNORED_DIGEST"
+        reward = {"OPENED_DIGEST": 0.48, "IGNORED_DIGEST": -0.16}[outcome]
+        reward -= 0.28 * scenario["importance"] * scenario["deadline"]
+    else:
+        organic_p = max(0.04, min(0.30, 0.08 + 0.15 * scenario["affinity"]))
+        outcome = "ORGANIC_INBOX_OPEN" if draw < organic_p else "NO_OBSERVATION"
+        reward = 0.16 if outcome == "ORGANIC_INBOX_OPEN" else 0.0
+    return outcome, reward
+
+
+def play_notification_round(scenario_id, action):
+    if not 0 <= scenario_id < len(GAME_SCENARIOS):
+        raise ValueError(f"scenario_id must be 0–{len(GAME_SCENARIOS) - 1}")
+    action = action.upper()
+    if action not in GAME_ACTIONS:
+        raise ValueError(f"action must be one of {GAME_ACTIONS}")
+
+    scenario = GAME_SCENARIOS[scenario_id]
+    action_index = GAME_ACTIONS.index(action)
+    utilities = _game_utilities(scenario)
+    best_index = max(range(len(GAME_ACTIONS)), key=lambda index: utilities[index])
+    outcome, reward = _execute_game_action(
+        scenario, action_index, utilities[action_index]
+    )
+    regret = utilities[best_index] - utilities[action_index]
+
+    display(Markdown(f"""
+### Your round: {scenario['name']}
+
+| Visible before acting | Value |
+| --- | --- |
+| Category / time | `{scenario['category']}` / {scenario['time']} |
+| Importance | {scenario['importance']:.2f} |
+| Deadline pressure | {scenario['deadline']:.2f} |
+| Personal affinity | {scenario['affinity']:.2f} |
+
+**You committed to:** `{action}`
+
+**One factual outcome:** `{outcome}` · teacher reward `{reward:+.3f}`
+
+#### Debrief — evaluator only
+
+Current busyness was `{scenario['busy']:.2f}`. The scoring-best route was
+`{GAME_ACTIONS[best_index]}`, so this action's regret was `{regret:.3f}` utility units.
+
+> The learner receives the factual outcome and reward, not the hidden busyness,
+> best route, or utilities shown in this debrief.
+"""))
+'''.strip()
+
+
+GAME_PLAY = r'''
+# Change these two values, then run this cell.
+SCENARIO_ID = 0
+MY_ACTION = "INTERRUPT"  # INTERRUPT, LATER, or ARCHIVE
+
+play_notification_round(SCENARIO_ID, MY_ACTION)
+'''.strip()
+
+
 RUNNER = r'''
 from io import StringIO
 
@@ -523,10 +644,11 @@ This notebook is **fully self-contained**: no network, downloads, repository che
 | --- | --- |
 | See the answer first | [1. Results at a glance](#1-results-at-a-glance) |
 | Understand the interaction visually | [2. Watch one causal round](#2-watch-one-causal-round) |
-| Check why the setup is realistic | [3. Understand the setting](#3-understand-the-setting) |
-| Compare Online-SFT and Online-SDFT | [4. Compare the methods](#4-compare-the-methods) |
-| Reproduce everything | [5. Reproduce the experiment](#5-reproduce-the-experiment-optional) |
-| Inspect curves and audits | [6. Metrics](#6-inspect-the-metrics-optional) · [7. Audits](#7-audit-the-realism-optional) |
+| Put yourself in the decision | [3. Play the router](#3-play-the-router) |
+| Check why the setup is realistic | [4. Understand the setting](#4-understand-the-setting) |
+| Compare Online-SFT and Online-SDFT | [5. Compare the methods](#5-compare-the-methods) |
+| Reproduce everything | [6. Reproduce the experiment](#6-reproduce-the-experiment-optional) |
+| Inspect curves and audits | [7. Metrics](#7-inspect-the-metrics-optional) · [8. Audits](#8-audit-the-realism-optional) |
 
 > Long code cells are collapsed by default where the notebook viewer supports it. Expand only the implementation details you want."""
         ),
@@ -562,9 +684,36 @@ The animation shows the non-cheating order: predict, commit and score, observe o
 If the student chooses `ARCHIVE`, no notification exists. The only factual outcomes are an organic inbox open or no observation—never a push or digest click."""
         ),
         nbf.v4.new_markdown_cell(
-            """## 3. Understand the setting
+            """## 3. Play the router
 
-### 3.1 Contextual-bandit contract
+Choose a scenario using only the visible cues, decide what **you** would do, then edit the two values in the play cell and run it.
+
+| ID | Notification | Visible cues |
+| ---: | --- | --- |
+| `0` | Afternoon calendar alert | High importance and deadline pressure |
+| `1` | On-call monitoring incident | High urgency during an incident |
+| `2` | Off-hours message from a close friend | Low urgency, high affinity |
+| `3` | Late-morning promotion | Low importance, deadline, and affinity |
+
+Commit mentally before revealing the outcome. The engine cell is collapsed because its hidden state would spoil the game."""
+        ),
+        reader_code_cell(GAME_ENGINE, "Hidden game engine and scenario state"),
+        nbf.v4.new_code_cell(
+            GAME_PLAY,
+            metadata={"tags": ["game-input"], "jupyter": {"source_hidden": False}},
+        ),
+        nbf.v4.new_markdown_cell(
+            """### 3.1 What to notice
+
+- A click does not prove the chosen route maximized total utility; interruption cost also matters.
+- Only the chosen action creates factual feedback. The other two user reactions are never sampled.
+- The evaluator-only debrief makes regret measurable in the simulator, but none of it trains the learner.
+- Today's feedback can improve the **next** decision; it cannot rewrite this round."""
+        ),
+        nbf.v4.new_markdown_cell(
+            """## 4. Understand the setting
+
+### 4.1 Contextual-bandit contract
 
 | Moment | Available | Sealed away |
 | --- | --- | --- |
@@ -575,7 +724,7 @@ If the student chooses `ARCHIVE`, no notification exists. The only factual outco
 The evaluator can grade the frozen action from hidden simulator state, but neither student nor teacher receives its utility vector."""
         ),
         nbf.v4.new_markdown_cell(
-            """### 3.2 Why this is not batch learning
+            """### 4.2 Why this is not batch learning
 
 | Batch learning | This online stream |
 | --- | --- |
@@ -587,9 +736,9 @@ The evaluator can grade the frozen action from hidden simulator state, but neith
 There is no train/test split. The stream drifts from weekday to on-call to off-hours behavior, and the objective is performance **during** adaptation."""
         ),
         nbf.v4.new_markdown_cell(
-            """## 4. Compare the methods
+            """## 5. Compare the methods
 
-### 4.1 Five methods on the same stream
+### 5.1 Five methods on the same stream
 
 | Method | Online adaptation |
 | --- | --- |
@@ -602,7 +751,7 @@ There is no train/test split. The stream drifts from weekday to on-call to off-h
 All methods act with the same 6% exploration and never receive the evaluator's preferred action."""
         ),
         nbf.v4.new_markdown_cell(
-            """### 4.2 Online-SFT versus Online-SDFT
+            """### 5.2 Online-SFT versus Online-SDFT
 
 | | Online-SFT | Online-SDFT |
 | --- | --- | --- |
@@ -614,60 +763,60 @@ All methods act with the same 6% exploration and never receive the evaluator's p
 Neither method trains on a ground-truth demonstration. SDFT preserves the teacher's relative preference over all routes instead of reducing it to one noisy draw."""
         ),
         nbf.v4.new_markdown_cell(
-            """## 5. Reproduce the experiment (optional)
+            """## 6. Reproduce the experiment (optional)
 
-The next three subsections contain the complete embedded implementation, execute 20 paired streams, and recompute the headline table. Skip to [Section 6](#6-inspect-the-metrics-optional) if you only want the saved outputs."""
+The next three subsections contain the complete embedded implementation, execute 20 paired streams, and recompute the headline table. Skip to [Section 7](#7-inspect-the-metrics-optional) if you only want the saved outputs."""
         ),
         nbf.v4.new_markdown_cell(
-            """### 5.1 Load the embedded simulator and policies
+            """### 6.1 Load the embedded simulator and policies
 
 This long cell defines the stream, factual feedback, scoring oracle, teacher, five methods, and online update loop. It reads no external file."""
         ),
         reader_code_cell(embedded_core(), "Optional: embedded simulator and method implementation"),
         nbf.v4.new_markdown_cell(
-            """### 5.2 Run the paired streams
+            """### 6.2 Run the paired streams
 
 All artifacts remain in memory: 20 seeds × 5 methods × 240 online decisions."""
         ),
         reader_code_cell(RUNNER, "Run the complete paired experiment in memory"),
-        nbf.v4.new_markdown_cell("### 5.3 Confirm the recomputed metrics"),
+        nbf.v4.new_markdown_cell("### 6.3 Confirm the recomputed metrics"),
         reader_code_cell(RESULTS, "Display the recomputed result table"),
         nbf.v4.new_markdown_cell(
-            """## 6. Inspect the metrics (optional)
+            """## 7. Inspect the metrics (optional)
 
-### 6.1 Aggregate online accuracy and regret
+### 7.1 Aggregate online accuracy and regret
 
 Accuracy is binary; regret weights mistakes by the evaluator's hidden utility gap. Both include cold start and exploration."""
         ),
         reader_code_cell(AGGREGATE_PLOT, "Plot aggregate accuracy and cumulative regret"),
         nbf.v4.new_markdown_cell(
-            """### 6.2 Learning along the stream
+            """### 7.2 Learning along the stream
 
 Dashed boundaries mark weekday → on-call → off-hours drift. Nothing is filtered or rescored after learning."""
         ),
         reader_code_cell(LEARNING_CURVES, "Plot online learning curves"),
         nbf.v4.new_markdown_cell(
-            """## 7. Audit the realism (optional)
+            """## 8. Audit the realism (optional)
 
-### 7.1 Counterfactual boundary
+### 8.1 Counterfactual boundary
 
 This assertion verifies that archived actions never produce notification clicks."""
         ),
         reader_code_cell(AUDIT_INVARIANT, "Assert the ARCHIVE feedback invariant"),
         nbf.v4.new_markdown_cell(
-            """### 7.2 Actions actually executed
+            """### 8.2 Actions actually executed
 
 The action mix is a diagnostic, not a relabeled counterfactual dataset."""
         ),
         reader_code_cell(ACTION_MIX, "Plot executed action counts"),
         nbf.v4.new_markdown_cell(
-            """## 8. Inspect later-stream examples (optional)
+            """## 9. Inspect later-stream examples (optional)
 
 These examples are selected after all rollouts finish. They show later decisions where Online-SDFT's actual pre-feedback action matches the evaluator and every comparison arm does not."""
         ),
         reader_code_cell(EXAMPLES, "Show qualitative Online-SDFT wins"),
         nbf.v4.new_markdown_cell(
-            """## 9. Takeaway
+            """## 10. Takeaway
 
 This is not batch training followed by a clean test. Every method pays for cold-start, exploration, and adaptation errors as they happen. Online-SFT keeps one noisy teacher draw; Online-SDFT keeps the teacher's complete relative preference. On identical streams, that soft signal reaches **74.8% online accuracy and 18.7 cumulative regret**, versus **61.8% and 40.2** for Online-SFT."""
         ),
