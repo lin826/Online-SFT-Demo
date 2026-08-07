@@ -357,6 +357,8 @@ print(f"Finished {N_SEEDS} paired streams × {len(METHODS)} methods × {STREAM_L
 
 
 RESULTS = r'''
+from IPython.display import Markdown, display
+
 header = "| Method | Online accuracy | 95% CI | Cumulative regret | 95% CI |\n| --- | ---: | ---: | ---: | ---: |"
 rows = []
 for method in METHODS:
@@ -370,7 +372,9 @@ display(Markdown(header + "\n" + "\n".join(rows)))
 '''.strip()
 
 
-PLOTS = r'''
+AGGREGATE_PLOT = r'''
+import matplotlib.pyplot as plt
+
 colors = {"Base": "#98A2B3", "ICL": "#D9903D", "RAG": "#D95C59",
           "Online-SFT": "#7D68B3", "Online-SDFT": "#0D9488"}
 
@@ -397,6 +401,14 @@ for ax, values, errors, title, ylabel in (
 fig.suptitle("One stream · score first, learn second · mean ± 95% CI", fontweight="bold")
 fig.tight_layout()
 plt.show()
+'''.strip()
+
+
+LEARNING_CURVES = r'''
+import matplotlib.pyplot as plt
+
+colors = {"Base": "#98A2B3", "ICL": "#D9903D", "RAG": "#D95C59",
+          "Online-SFT": "#7D68B3", "Online-SDFT": "#0D9488"}
 
 by_accuracy, by_regret = defaultdict(list), defaultdict(list)
 for row in curves:
@@ -430,7 +442,9 @@ plt.show()
 '''.strip()
 
 
-AUDIT = r'''
+AUDIT_INVARIANT = r'''
+from IPython.display import Markdown, display
+
 archive_rows = [row for row in rollouts if row["action"] == "ARCHIVE"]
 archive_outcomes = Counter(row["feedback"]["outcome"] for row in archive_rows)
 assert set(archive_outcomes) <= {"ORGANIC_INBOX_OPEN", "NO_OBSERVATION"}
@@ -440,6 +454,11 @@ display(Markdown(
     f"**{len(archive_rows):,} archived decisions** produced only factual outcomes: "
     f"`{dict(archive_outcomes)}`. No archived decision generated a push or digest click."
 ))
+'''.strip()
+
+
+ACTION_MIX = r'''
+import matplotlib.pyplot as plt
 
 counts = {method: Counter(row["action"] for row in rollouts if row["method"] == method)
           for method in METHODS}
@@ -458,6 +477,8 @@ plt.show()
 
 
 EXAMPLES = r'''
+from IPython.display import Markdown, display
+
 for example in qualitative[:4]:
     display(Markdown(
         f"### Step {example['t']} · {example['regime']} · {example['category']}  \n"
@@ -470,75 +491,185 @@ for example in qualitative[:4]:
 '''.strip()
 
 
+def reader_code_cell(source: str, title: str):
+    """Create a code cell whose input is collapsed in Colab/Jupyter viewers."""
+    source = f'# @title {title} {{ display-mode: "form" }}\n{source}'
+    return nbf.v4.new_code_cell(
+        source,
+        metadata={
+            "cellView": "form",
+            "jupyter": {"source_hidden": True},
+            "tags": ["hide-input"],
+        },
+    )
+
+
 def markdown_cells() -> list:
+    animation_source = (
+        GIF_FUNCTIONS
+        + "\n\nfrom IPython.display import Image as NotebookImage, Markdown, display\n"
+          "gif_bytes = make_online_sdft_gif()\n"
+          "display(NotebookImage(data=gif_bytes))"
+    )
     return [
         nbf.v4.new_markdown_cell(
             """# Learning when silence has no click: Online SDFT
 
-This notebook is **fully self-contained**. It contains the notification simulator, all five methods, the causal interaction loop, the 20-seed experiment, audits, plots, and animation generator. Running all cells requires no network access, repository checkout, downloads, or input files.
+This notebook is **fully self-contained**: no network, downloads, repository checkout, or input files are required.
 
-> **Mental model:** every notification is first a live test decision. Only after the action is committed can its one factual outcome become evidence for later decisions. There is no answer key before acting and no retroactive correction."""
+## Choose a reading path
+
+| If you want to… | Jump to |
+| --- | --- |
+| See the answer first | [1. Results at a glance](#1-results-at-a-glance) |
+| Understand the interaction visually | [2. Watch one causal round](#2-watch-one-causal-round) |
+| Check why the setup is realistic | [3. Understand the setting](#3-understand-the-setting) |
+| Compare Online-SFT and Online-SDFT | [4. Compare the methods](#4-compare-the-methods) |
+| Reproduce everything | [5. Reproduce the experiment](#5-reproduce-the-experiment-optional) |
+| Inspect curves and audits | [6. Metrics](#6-inspect-the-metrics-optional) · [7. Audits](#7-audit-the-realism-optional) |
+
+> Long code cells are collapsed by default where the notebook viewer supports it. Expand only the implementation details you want."""
         ),
-        nbf.v4.new_code_cell(embedded_core()),
         nbf.v4.new_markdown_cell(
-            """## Contextual-bandit contract
+            """## 1. Results at a glance
 
-At round $t$, the student sees $x_t$ and samples $a_t\sim\pi_t(\cdot\mid x_t)$. The evaluator freezes that action and scores it. The environment then executes **only** $a_t$ and produces factual feedback. A post-decision teacher may turn that factual record into a soft target $q_t$, but any update can affect only $t+1$.
+Every one of the 240 decisions counts, including cold start and exploration. Mean over 20 paired streams:
+
+| Method | Online accuracy | Cumulative regret ↓ |
+| --- | ---: | ---: |
+| Base | 52.17% ± 1.23 | 71.17 ± 2.93 |
+| ICL | 45.75% ± 1.05 | 78.38 ± 3.39 |
+| RAG | 53.15% ± 1.62 | 56.60 ± 4.39 |
+| Online-SFT | 61.79% ± 2.51 | 40.17 ± 4.51 |
+| **Online-SDFT** | **74.77% ± 1.24** | **18.65 ± 1.28** |
+
+**Short conclusion:** the full soft teacher distribution is a substantially better online target than one sampled hard teacher action. Stop here if you only need the result."""
+        ),
+        nbf.v4.new_markdown_cell(
+            """## 2. Watch one causal round
+
+The animation shows the non-cheating order: predict, commit and score, observe one factual world, then learn for the next round."""
+        ),
+        reader_code_cell(animation_source, "Generate the in-memory Online-SDFT animation"),
+        nbf.v4.new_markdown_cell(
+            """### 2.1 What the animation establishes
+
+- The student acts without current feedback or privileged telemetry.
+- The score is frozen before the user outcome exists.
+- Only the selected route produces feedback; unchosen outcomes stay unknown.
+- The teacher's soft distribution updates at most four records for `t+1`.
+
+If the student chooses `ARCHIVE`, no notification exists. The only factual outcomes are an organic inbox open or no observation—never a push or digest click."""
+        ),
+        nbf.v4.new_markdown_cell(
+            """## 3. Understand the setting
+
+### 3.1 Contextual-bandit contract
 
 | Moment | Available | Sealed away |
 | --- | --- | --- |
 | Student rollout | current context, parameters, past factual records | current feedback, future events, scoring oracle |
 | Environment | outcome caused by the selected action | outcomes for both unchosen actions |
-| Online update | post-decision teacher target, at most four records | oracle action, ground-truth demonstration, retroactive score changes |
+| Online update | post-decision teacher target, batch ≤4 | oracle action, ground-truth demonstration, retroactive correction |
 
-If the action is `ARCHIVE`, no notification exists. The only possible observations are an organic inbox open or no observation—never a push or digest click."""
-        ),
-        nbf.v4.new_markdown_cell("## One Online-SDFT round, animated"),
-        nbf.v4.new_code_cell(
-            GIF_FUNCTIONS
-            + "\n\nfrom IPython.display import Image as NotebookImage, Markdown, display\n"
-              "gif_bytes = make_online_sdft_gif()\n"
-              "display(NotebookImage(data=gif_bytes))"
+The evaluator can grade the frozen action from hidden simulator state, but neither student nor teacher receives its utility vector."""
         ),
         nbf.v4.new_markdown_cell(
-            """The animation makes the information boundary visible: the student acts without privileged feedback; the score is frozen; unchosen outcomes remain unknown; then the teacher's full distribution updates a tiny batch for the **next** decision."""
+            """### 3.2 Why this is not batch learning
+
+| Batch learning | This online stream |
+| --- | --- |
+| Labels exist before training | Feedback exists only after acting |
+| Examples may be shuffled for many epochs | Events arrive once, in order |
+| Evaluation follows training | Every live action is evaluated |
+| Early errors disappear from test metrics | Cold-start and adaptation errors remain |
+
+There is no train/test split. The stream drifts from weekday to on-call to off-hours behavior, and the objective is performance **during** adaptation."""
         ),
-        nbf.v4.new_markdown_cell("## Run the complete experiment in memory"),
-        nbf.v4.new_code_cell(RUNNER),
         nbf.v4.new_markdown_cell(
-            """## Five methods, one causal stream
+            """## 4. Compare the methods
 
-- **Base:** frozen generic policy.
-- **ICL:** recent hard teacher rollouts remain in context; no weight update.
-- **RAG:** retrieves hard teacher rollouts from similar earlier contexts.
-- **Online-SFT:** updates from one sampled hard teacher rollout.
-- **Online-SDFT:** updates from the complete soft teacher distribution.
+### 4.1 Five methods on the same stream
 
-The student always produces its rollout from $x_t$ without privileged feedback. The teacher is called only after execution. The scoring oracle is never supplied to a method, teacher target, memory item, or gradient batch."""
+| Method | Online adaptation |
+| --- | --- |
+| Base | Frozen generic policy |
+| ICL | Recent sampled teacher actions in context |
+| RAG | Similar past sampled teacher actions retrieved |
+| Online-SFT | Weight update from one sampled teacher action |
+| **Online-SDFT** | Weight update from the teacher's full soft distribution |
+
+All methods act with the same 6% exploration and never receive the evaluator's preferred action."""
         ),
-        nbf.v4.new_code_cell(RESULTS),
         nbf.v4.new_markdown_cell(
-            """## Online accuracy and cumulative regret
+            """### 4.2 Online-SFT versus Online-SDFT
 
-Every action is included, including cold start and 6% exploration. Dashed boundaries mark weekday → on-call → off-hours drift. Nothing is filtered or rescored after learning."""
+| | Online-SFT | Online-SDFT |
+| --- | --- | --- |
+| Student rollout | From `x_t`, without `z_t` | From `x_t`, without `z_t` |
+| Teacher timing | After factual feedback | After factual feedback |
+| Retained target | One sampled hard action | Full soft distribution `q_t` |
+| Online batch | Fresh + up to 3 past items | Fresh + up to 3 past items |
+
+Neither method trains on a ground-truth demonstration. SDFT preserves the teacher's relative preference over all routes instead of reducing it to one noisy draw."""
         ),
-        nbf.v4.new_code_cell(PLOTS),
         nbf.v4.new_markdown_cell(
-            """## Audit the counterfactual boundary
+            """## 5. Reproduce the experiment (optional)
 
-The in-memory rollout records allow a direct causal check: archived actions must never produce notification clicks. The next cell asserts that invariant and plots the actions that each method actually executed."""
+The next three subsections contain the complete embedded implementation, execute 20 paired streams, and recompute the headline table. Skip to [Section 6](#6-inspect-the-metrics-optional) if you only want the saved outputs."""
         ),
-        nbf.v4.new_code_cell(AUDIT),
         nbf.v4.new_markdown_cell(
-            """## Later-stream qualitative decisions
+            """### 5.1 Load the embedded simulator and policies
 
-These examples are selected only after all rollouts finish. They show later positions where Online-SDFT's actual pre-feedback action matches the evaluator and every comparison arm's action does not."""
+This long cell defines the stream, factual feedback, scoring oracle, teacher, five methods, and online update loop. It reads no external file."""
         ),
-        nbf.v4.new_code_cell(EXAMPLES),
+        reader_code_cell(embedded_core(), "Optional: embedded simulator and method implementation"),
         nbf.v4.new_markdown_cell(
-            """## Takeaway
+            """### 5.2 Run the paired streams
 
-This is not batch training followed by a clean test. Each method pays for every cold-start, exploration, and adaptation mistake at the time it occurs. Online-SFT receives one noisy draw from the post-decision teacher; Online-SDFT retains the teacher's relative preference over all three actions. On the same paired streams, the soft signal reaches **74.8% online accuracy with 18.7 cumulative regret**, versus **61.8% and 40.2** for Online-SFT."""
+All artifacts remain in memory: 20 seeds × 5 methods × 240 online decisions."""
+        ),
+        reader_code_cell(RUNNER, "Run the complete paired experiment in memory"),
+        nbf.v4.new_markdown_cell("### 5.3 Confirm the recomputed metrics"),
+        reader_code_cell(RESULTS, "Display the recomputed result table"),
+        nbf.v4.new_markdown_cell(
+            """## 6. Inspect the metrics (optional)
+
+### 6.1 Aggregate online accuracy and regret
+
+Accuracy is binary; regret weights mistakes by the evaluator's hidden utility gap. Both include cold start and exploration."""
+        ),
+        reader_code_cell(AGGREGATE_PLOT, "Plot aggregate accuracy and cumulative regret"),
+        nbf.v4.new_markdown_cell(
+            """### 6.2 Learning along the stream
+
+Dashed boundaries mark weekday → on-call → off-hours drift. Nothing is filtered or rescored after learning."""
+        ),
+        reader_code_cell(LEARNING_CURVES, "Plot online learning curves"),
+        nbf.v4.new_markdown_cell(
+            """## 7. Audit the realism (optional)
+
+### 7.1 Counterfactual boundary
+
+This assertion verifies that archived actions never produce notification clicks."""
+        ),
+        reader_code_cell(AUDIT_INVARIANT, "Assert the ARCHIVE feedback invariant"),
+        nbf.v4.new_markdown_cell(
+            """### 7.2 Actions actually executed
+
+The action mix is a diagnostic, not a relabeled counterfactual dataset."""
+        ),
+        reader_code_cell(ACTION_MIX, "Plot executed action counts"),
+        nbf.v4.new_markdown_cell(
+            """## 8. Inspect later-stream examples (optional)
+
+These examples are selected after all rollouts finish. They show later decisions where Online-SDFT's actual pre-feedback action matches the evaluator and every comparison arm does not."""
+        ),
+        reader_code_cell(EXAMPLES, "Show qualitative Online-SDFT wins"),
+        nbf.v4.new_markdown_cell(
+            """## 9. Takeaway
+
+This is not batch training followed by a clean test. Every method pays for cold-start, exploration, and adaptation errors as they happen. Online-SFT keeps one noisy teacher draw; Online-SDFT keeps the teacher's complete relative preference. On identical streams, that soft signal reaches **74.8% online accuracy and 18.7 cumulative regret**, versus **61.8% and 40.2** for Online-SFT."""
         ),
     ]
 
