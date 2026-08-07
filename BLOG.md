@@ -1,5 +1,9 @@
 # Learning From the Notification You Did—or Didn’t—Send
 
+![A notification stream enters a small on-device model; one route is executed while its factual feedback loops back to improve the next decision](figures/blog_teaser.png)
+
+*One notification, one executed route, one factual outcome—and a better decision next time.*
+
 > **Draft.** How Online Soft-Distillation Fine-Tuning can help a small on-device model personalize itself from one real interaction at a time.
 
 A notification router has a deceptively hard job. For every message, it must choose whether to interrupt now, save it for later, or archive it. Then it sees only what happened after that choice. If it archives a message, it cannot also observe whether the user would have clicked a push. That alternate outcome never occurred.
