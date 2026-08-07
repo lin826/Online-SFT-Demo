@@ -24,6 +24,7 @@ Mean over 20 paired 240-event streams; `±` is a 95% confidence interval.
 | [Methods](docs/methods.md) | Base, ICL, RAG, Online-SFT, and Online-SDFT |
 | [Evaluation and regret](docs/evaluation.md) | Exact regret calculation, utility weights, and their limitations |
 | [Results and reproduction](docs/results.md) | Protocol, plots, commands, notebook, and artifacts |
+| [Blog draft](BLOG.md) | An accessible narrative about continual, on-device learning and Online-SDFT |
 
 ## Quick start
 
