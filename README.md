@@ -8,22 +8,22 @@ That is a contextual bandit, not ordinary labeled classification. The agent repe
 
 ## The contextual-bandit contract
 
-At interaction `t`:
+At interaction $t$:
 
-1. A context `x_t` arrives with information available **before** routing.
-2. The student samples an action `a_t ~ π_t(·|x_t)`, without current feedback or privileged information.
+1. A context $x_t$ arrives with information available **before** routing.
+2. The student samples an action $a_t \sim \pi_t(\cdot \mid x_t)$, without current feedback or privileged information.
 3. The action is recorded and scored immediately. This freezes the online result before learning can occur.
-4. The environment executes **only** `a_t`, then returns factual feedback `z_t ~ P(·|x_t,a_t)`.
-5. A post-decision teacher reads `(x_t,a_t,z_t)` and returns a soft policy `q_t = π_teacher(·|x_t,a_t,z_t)`.
-6. A tiny online update may change `π_{t+1}`. It cannot rewrite the prediction already made at `t`.
+4. The environment executes **only** $a_t$, then returns factual feedback $z_t \sim P(\cdot \mid x_t,a_t)$.
+5. A post-decision teacher reads $(x_t,a_t,z_t)$ and returns a soft policy $q_t=\pi_{\mathrm{teacher}}(\cdot \mid x_t,a_t,z_t)$.
+6. A tiny online update may change $\pi_{t+1}$. It cannot rewrite the prediction already made at $t$.
 
 The information boundary is the point of the experiment:
 
 | Moment | Learner may use | Learner may **not** use |
 | --- | --- | --- |
-| Choose `a_t` | `x_t`, current parameters, past factual records | current `z_t`, future events, oracle action, ground-truth demonstration |
-| Observe | outcome caused by the selected `a_t` | outcomes of either unchosen action |
-| Update for `t+1` | teacher distribution from `(x_t,a_t,z_t)`, small replay batch | simulator oracle, counterfactual user reactions, retroactive correction |
+| Choose $a_t$ | $x_t$, current parameters, past factual records | current $z_t$, future events, oracle action, ground-truth demonstration |
+| Observe | outcome caused by the selected $a_t$ | outcomes of either unchosen action |
+| Update for $t+1$ | teacher distribution from $(x_t,a_t,z_t)$, small replay batch | simulator oracle, counterfactual user reactions, retroactive correction |
 | Evaluate | a sealed scoring oracle computes correctness and regret | oracle output entering any policy or update function |
 
 The scoring oracle is an **experiment instrument**, not a training label. It tells the researcher how costly the committed action was; it is never exposed to Base, ICL, RAG, Online-SFT, Online-SDFT, or the teacher.
@@ -40,7 +40,7 @@ The stream also drifts from weekday to on-call to off-hours behavior. The agent 
 
 | Batch supervised learning | This online contextual bandit |
 | --- | --- |
-| A fixed dataset contains `(x,y*)` labels before training | The stream reveals `x_t`, then feedback only after an action |
+| A fixed dataset contains $(x,y^*)$ labels before training | The stream reveals $x_t$, then feedback only after an action |
 | Training can shuffle examples for many epochs | Events arrive once, in order, while user behavior drifts |
 | The model is evaluated after training on a held-out split | Every live action is scored before its update |
 | A label identifies the desired prediction | Feedback is partial and depends on the chosen action |
@@ -48,9 +48,59 @@ The stream also drifts from weekday to on-call to off-hours behavior. The agent 
 
 There is intentionally no train/test split: the objective is quality **during learning**, measured by prequential online accuracy and cumulative regret over the one stream.
 
+## How regret is calculated
+
+Online accuracy asks whether the chosen route exactly matches the simulator's best route. Regret is more informative: it measures **how much expected user utility the committed action leaves on the table**. Choosing a nearly equivalent route incurs little regret; choosing a harmful route when a much better one exists incurs more.
+
+For evaluation, the simulator has an expected-utility function $\mu_t(a)$ for each action $a \in \mathcal A$. It uses the generated notification attributes and latent user state for round $t$. The scoring-only oracle is
+
+$$
+a_t^*=\underset{a \in \mathcal A}{\operatorname{arg\,max}}\;\mu_t(a).
+$$
+
+Once the policy commits to $a_t$, its instantaneous regret is
+
+$$
+r_t=\mu_t(a_t^*)-\mu_t(a_t) \ge 0.
+$$
+
+The experiment accumulates every decision—including cold start and 6% exploration—without resetting after an update:
+
+$$
+R_T=\sum_{t=1}^{T} r_t.
+$$
+
+### Concrete example
+
+For the first weekday event in seed 0, the Base policy chose `INTERRUPT`. The simulator's sealed expected utilities were:
+
+| Route | Expected utility $\mu_1(a)$ | Role |
+| --- | ---: | --- |
+| `INTERRUPT` | -0.5499 | policy action |
+| `LATER` | 0.8528 | scoring-only oracle action |
+| `ARCHIVE` | 0.5100 | unchosen alternative |
+
+Therefore,
+
+$$
+r_1=0.8528-(-0.5499)=1.4027.
+$$
+
+The environment then executed only `INTERRUPT` and factually observed `IGNORED_PUSH`. It did **not** reveal what the user would have done under `LATER` or `ARCHIVE`. The full utility vector above is used by the benchmark evaluator only; it is never passed to the acting policy, teacher, replay memory, or update function. The selected action's sampled feedback may help the teacher construct $q_t$ for future rounds, but it cannot change $r_t$.
+
+This separation is why the benchmark is not cheating: a simulator may retain all potential expected utilities to grade an agent, just as a game environment retains hidden state, while exposing only action-dependent observations to the learner. Exact regret would not be directly observable in a live notification system. A production study would estimate it through randomized propensity logging, an off-policy estimator, or an online controlled experiment. The realism claim here concerns the **agent's interaction and feedback path**; the complete simulator utility function exists only to make controlled evaluation possible.
+
+Each method receives a cumulative result $R_{240}$ on each of 20 paired streams. The table reports the across-seed mean
+
+$$
+\bar R_{240}=\frac{1}{20}\sum_{s=1}^{20}R_{240}^{(s)}
+$$
+
+with a 95% confidence interval $\bar R_{240} \pm 1.96\,s_R/\sqrt{20}$. Regret is measured in simulator utility units, not clicks or percentage points. Lower is better; zero would mean selecting the scoring-best route on every round. `outputs/bandit/learning_curves.csv` contains $r_t$ and $R_t$ after every action, while `regret_per_decision` in the seed summaries is $R_{240}/240$.
+
 ## Where SDFT fits
 
-The student generates its own rollout from `x_t` alone. Only after the action and factual feedback does the privileged teacher produce `q_t`. Online-SDFT trains on that complete soft distribution with a small batch; Online-SFT receives only one sampled hard rollout from the same teacher. Neither method trains directly on the simulator's ground-truth action `y*`.
+The student generates its own rollout from $x_t$ alone. Only after the action and factual feedback does the privileged teacher produce $q_t$. Online-SDFT trains on that complete soft distribution with a small batch; Online-SFT receives only one sampled hard rollout from the same teacher. Neither method trains directly on the simulator's ground-truth action $y^*$.
 
 ## Result: one stream, predict then learn
 

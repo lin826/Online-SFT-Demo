@@ -4,7 +4,7 @@
 
 This experiment evaluates notification routing as a pure online-learning problem. There is one stream and no train/test split. At every step, each agent must choose `INTERRUPT`, `LATER`, or `ARCHIVE`; that action is scored immediately, then executed, then its factual feedback becomes available for future learning.
 
-Online Soft-Distillation Fine-Tuning (Online-SDFT) learns from a privileged teacher distribution `π_teacher(.|x,z)`. The online student acts from `x` alone and never learns from the simulator's scoring-only oracle action.
+Online Soft-Distillation Fine-Tuning (Online-SDFT) learns from a privileged teacher distribution $\pi_{\mathrm{teacher}}(\cdot \mid x,z)$. The online student acts from $x$ alone and never learns from the simulator's scoring-only oracle action.
 
 Across 20 paired streams, Online-SDFT achieves the highest prequential online accuracy and the lowest cumulative contextual-bandit regret:
 
@@ -22,29 +22,29 @@ Values are means ±95% confidence intervals over seeds. Relative to Online-SFT, 
 
 ## 1. One-stream online problem
 
-At time (t):
+At time $t$:
 
-1. A notification context (x_t) arrives.
-2. The agent chooses (a_t\sim\pi_t(\cdot\mid x_t)).
+1. A notification context $x_t$ arrives.
+2. The agent chooses $a_t\sim\pi_t(\cdot\mid x_t)$.
 3. Before seeing feedback, its action is scored for online accuracy and regret.
-4. Only (a_t) is executed.
-5. Factual feedback (z_t\sim P(z\mid x_t,a_t)) arrives.
-6. The method may update and use that information starting at (t+1).
+4. Only $a_t$ is executed.
+5. Factual feedback $z_t\sim P(z\mid x_t,a_t)$ arrives.
+6. The method may update and use that information starting at $t+1$.
 
 Thus the reported accuracy is prequential:
 
-\[
+$$
 \mathrm{OnlineAccuracy}_T=\frac1T\sum_{t=1}^T
-\mathbf1[a_t=a_t^*].
-\]
+\mathbf{1}[a_t=a_t^*].
+$$
 
 There is no held-out evaluation and no retroactive rescoring of an updated model.
 
 The action space is
 
-\[
+$$
 \mathcal A=\{\texttt{INTERRUPT},\texttt{LATER},\texttt{ARCHIVE}\}.
-\]
+$$
 
 The 240-decision stream drifts through three consecutive 80-decision regimes: weekday, on-call, and off-hours. Each context contains a notification category, importance, deadline pressure, affinity, time-of-day, coarse time-of-week, and feature interactions. Seven categories are balanced: manager, calendar, monitoring, teammate, social, receipt, and promotion.
 
@@ -62,29 +62,29 @@ An archived notification never produces a push or digest click because no notifi
 
 The simulator contains expected utilities only to score decisions. The scoring-only oracle is
 
-\[
+$$
 a_t^*=\arg\max_a\mu(x_t,a),
-\]
+$$
 
 and per-step regret is
 
-\[
+$$
 \Delta_t=\mu(x_t,a_t^*)-\mu(x_t,a_t).
-\]
+$$
 
-Cumulative regret is (R_T=\sum_{t=1}^T\Delta_t). Oracle fields in the raw logs are explicitly suffixed `scoring_only`; they are never passed into any update function.
+Cumulative regret is $R_T=\sum_{t=1}^T\Delta_t$. Oracle fields in the raw logs are explicitly suffixed `scoring_only`; they are never passed into any update function.
 
 ## 3. Teacher rollouts—not ground truth
 
-After the action and factual outcome, a privileged teacher observes ((x_t,a_t,z_t)). Its extra telemetry includes current device interruptibility and semantic metadata that are realistic for a more capable post-hoc/cloud teacher but unavailable to the lightweight pre-decision student.
+After the action and factual outcome, a privileged teacher observes $(x_t,a_t,z_t)$. Its extra telemetry includes current device interruptibility and semantic metadata that are realistic for a more capable post-hoc/cloud teacher but unavailable to the lightweight pre-decision student.
 
 The teacher emits a noisy calibrated distribution
 
-\[
+$$
 q_t(a)=\pi_{\mathrm{teacher}}(a\mid x_t,a_t,z_t),
-\]
+$$
 
-and a hard teacher rollout is sampled as (	ilde a_t\sim q_t). The teacher is not handed (a_t^*).
+and a hard teacher rollout is sampled as $\tilde a_t\sim q_t$. The teacher is not handed $a_t^*$.
 
 All agents use an epsilon-greedy rollout with 6% exploration. Explored actions remain in both accuracy and regret; they are not filtered from results.
 
@@ -108,24 +108,24 @@ The policy retrieves the five closest earlier contexts and blends their hard tea
 
 SFT uses one sampled hard teacher rollout as a one-hot target:
 
-\[
+$$
 L_{\mathrm{SFT}}=-\log\pi_\theta(\tilde a_t\mid x_t).
-\]
+$$
 
-This is not direct training on (a_t^*). It is hard distillation from one noisy teacher sample.
+This is not direct training on $a_t^*$. It is hard distillation from one noisy teacher sample.
 
 ### Online-SDFT
 
 SDFT preserves all probabilities:
 
-\[
+$$
 L_{\mathrm{SDFT}}=
 D_{\mathrm{KL}}\left(q_t(\cdot)\;\|\;\pi_\theta(\cdot\mid x_t)\right).
-\]
+$$
 
 SFT and SDFT both use a 24-record sliding replay window and a batch of at most four records: the fresh item plus three replay samples. Separate coarse learning-rate sweeps select stable rates for hard and soft targets; the soft distribution permits a larger update without the variance of sampled one-hot labels.
 
-This is the key controlled comparison: SFT observes one draw from (q_t); SDFT observes the full (q_t).
+This is the key controlled comparison: SFT observes one draw from $q_t$; SDFT observes the full $q_t$.
 
 ## 5. Online results
 
