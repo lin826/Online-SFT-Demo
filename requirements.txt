@@ -3,5 +3,6 @@ transformers>=4.54
 peft>=0.15
 matplotlib>=3.8
 numpy>=1.26
+Pillow>=10.0
 psutil>=5.9
 notebook>=7.0

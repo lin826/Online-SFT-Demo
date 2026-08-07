@@ -6,6 +6,10 @@ That is a contextual bandit, not ordinary labeled classification. The agent repe
 
 ![Contextual-bandit interaction: predict, act, observe, then learn for the next decision](figures/contextual_bandit_loop.png)
 
+The animated walkthrough makes the timing constraint explicit: the student commits first, the environment reveals one factual outcome, and only then can the teacher supervise the next update.
+
+![Animated Online-SDFT causal round](figures/online_sdft_process.gif)
+
 ## The contextual-bandit contract
 
 At interaction $t$:
@@ -216,7 +220,7 @@ python -m venv .venv
 .venv/bin/python run.py
 ```
 
-Or open [online_sdft_bandit_demo.ipynb](online_sdft_bandit_demo.ipynb) for the visual walkthrough. The notebook can regenerate all results or inspect the checked-in run artifacts.
+Or open [online_sdft_bandit_demo.ipynb](online_sdft_bandit_demo.ipynb) for the visual walkthrough. It is fully self-contained: the simulator, methods, experiment runner, animation, plots, and audit are embedded in the notebook. It does not clone this repository, download data, or read checked-in artifacts.
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/lin826/Online-SFT-Demo/blob/main/online_sdft_bandit_demo.ipynb)
 
@@ -229,14 +233,16 @@ Or open [online_sdft_bandit_demo.ipynb](online_sdft_bandit_demo.ipynb) for the v
 - `outputs/bandit/summary.json`: aggregate means, standard deviations, and confidence intervals.
 - `outputs/bandit/qualitative_examples.json`: later-stage cases where SDFT is correct and all comparison arms are not.
 - `figures/bandit_*.png`: aggregate, learning-curve, and action-feedback visualizations.
-- `figures/contextual_bandit_loop.png`: causal online-interaction illustration used in this README and the notebook.
+- `figures/contextual_bandit_loop.png`: static causal online-interaction illustration.
+- `figures/online_sdft_process.gif`: animated predict–commit–observe–teach–update walkthrough.
 
 ## Main files
 
 | File | Purpose |
 | --- | --- |
 | `bandit_experiment.py` | Authoritative fast, multi-seed experiment and artifact generator |
-| `online_sdft_bandit_demo.ipynb` | Visual general-audience walkthrough and replication notebook |
+| `online_sdft_bandit_demo.ipynb` | Self-contained visual walkthrough and in-memory replication notebook |
+| `build_standalone_notebook.py` | Reproducibly rebuilds the standalone notebook and animated GIF |
 | `tests/test_bandit_experiment.py` | Causal feedback, information-boundary, and experiment invariants |
 
 The multi-seed simulator is the primary reported experiment.
