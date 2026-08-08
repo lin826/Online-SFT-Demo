@@ -10,7 +10,8 @@ the same drifting stream—there is no train/test split.
 
 For a full rerun, select **Runtime → Change runtime type → T4 GPU** in Colab,
 then execute Sections 6.1–6.4. The setup cell preserves Colab's CUDA PyTorch and
-removes its incompatible, unused `torchao` package before loading PEFT.
+removes its incompatible, unused `torchao` package before loading PEFT. The
+verified T4 run takes about 4 minutes and includes a pass/fail ranking check.
 
 ![Online-SDFT causal interaction](figures/online_sdft_process.gif)
 

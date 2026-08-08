@@ -50,3 +50,14 @@ def test_colab_runner_reports_progress_and_releases_cuda_cache():
     assert "seed {seed + 1}/{seeds}" in runner
     assert "torch.cuda.empty_cache()" in runner
     assert "N_SEEDS = 3" in runner
+
+
+def test_colab_results_cell_is_self_checking():
+    results = next(
+        source
+        for source in _code_sources()
+        if "Reproduction check passed" in source
+    )
+    assert 'summary["Online-SDFT"]' in results
+    assert 'row["online_accuracy"]["mean"] for row in baselines' in results
+    assert 'row["cum_regret"]["mean"] for row in baselines' in results
