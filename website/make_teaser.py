@@ -30,6 +30,9 @@ TEAL = "#0f6f63"
 TEAL_SOFT = "#eaf3f1"
 
 FONT_STACK = ["Helvetica Neue", "Helvetica", "Arial", "DejaVu Sans"]
+# Sizes below are authored against the layout grid; this scales them so the
+# rendered labels land near 11-12px at the article's figure width.
+TEXT_SCALE = 1.1
 
 
 def _box(axis, x, y, width, height, *, fill="white", edge=LINE, lw=1.0, radius=1.4):
@@ -68,7 +71,8 @@ def _arrow(axis, start, end, *, color=LINE, lw=1.2, style="-", connection="arc3,
 def _text(axis, x, y, label, *, size=8.5, color=INK, weight="normal", ha="center"):
     axis.text(
         x, y, label,
-        ha=ha, va="center", fontsize=size, color=color, fontweight=weight, zorder=4,
+        ha=ha, va="center", fontsize=size * TEXT_SCALE, color=color,
+        fontweight=weight, zorder=4,
     )
 
 
@@ -76,24 +80,24 @@ def draw_teaser(output_path: Path) -> None:
     matplotlib.rcParams.update(
         {"font.family": "sans-serif", "font.sans-serif": FONT_STACK}
     )
-    figure, axis = plt.subplots(figsize=(7.8, 3.2))
+    figure, axis = plt.subplots(figsize=(7.3, 3.0))
     axis.set_xlim(0, 100)
     axis.set_ylim(0, 40)
     axis.axis("off")
 
     # Incoming stream of requests.
     for offset, shade in ((3.0, "#f1f3f6"), (1.5, "#e9ecf1"), (0.0, "white")):
-        _box(axis, 2 + offset, 21 + offset * 0.9, 13, 7.4, fill=shade, edge=LINE)
-    _text(axis, 8.5, 26.4, "10:47 p.m. receipt", size=7.6, color=INK)
-    _text(axis, 8.5, 23.6, "importance 0.31", size=7, color=MUTED)
+        _box(axis, 1.5 + offset, 21 + offset * 0.9, 14.5, 7.4, fill=shade, edge=LINE)
+    _text(axis, 8.7, 26.4, "10:47 p.m. receipt", size=7.6, color=INK)
+    _text(axis, 8.7, 23.6, "importance 0.31", size=7, color=MUTED)
     _text(axis, 9.0, 17.6, "one request at a time", size=7.4, color=MUTED)
 
-    _arrow(axis, (16, 24.7), (22.4, 24.7), color=FAINT, lw=1.1)
+    _arrow(axis, (17.2, 24.7), (22.4, 24.7), color=FAINT, lw=1.1)
 
     # On-device student.
-    _box(axis, 23, 12.6, 21, 21.9, fill="white", edge=LINE, lw=1.1)
-    _text(axis, 33.5, 31.6, "on-device student", size=8, color=INK, weight="bold")
-    _text(axis, 33.5, 28.8, "frozen 230M LFM + LoRA", size=7, color=MUTED)
+    _box(axis, 23, 12.6, 22.2, 21.9, fill="white", edge=LINE, lw=1.1)
+    _text(axis, 34.1, 31.6, "on-device student", size=8, color=INK, weight="bold")
+    _text(axis, 34.1, 28.8, "frozen 230M LFM + LoRA", size=7, color=MUTED)
     routes = (("INTERRUPT", 0.18), ("LATER", 0.29), ("ARCHIVE", 0.53))
     for index, (name, probability) in enumerate(routes):
         y = 25.2 - index * 3.8
@@ -113,7 +117,7 @@ def draw_teaser(output_path: Path) -> None:
                 facecolor=ACCENT if chosen else "#b9c1cc", edgecolor="none", zorder=4,
             )
         )
-    _text(axis, 33.5, 15.0, "acts before any feedback exists", size=7, color=MUTED)
+    _text(axis, 34.1, 15.0, "acts before any feedback exists", size=6.6, color=MUTED)
 
     # Three routes; only one of them is ever executed.
     _text(axis, 67, 37.8, "one route executes", size=7.8, color=INK)
@@ -122,7 +126,7 @@ def draw_teaser(output_path: Path) -> None:
     for name, y, executed in lanes:
         rad = 0.0 if abs(y - 24.0) < 0.1 else (0.1 if y > 24.0 else -0.1)
         _arrow(
-            axis, (44.6, 24.0), (55.4, y),
+            axis, (45.8, 24.0), (55.4, y),
             color=ACCENT if executed else "#d2d7de",
             lw=1.6 if executed else 1.0,
             style="-" if executed else (0, (3, 2.4)),
@@ -163,16 +167,16 @@ def draw_teaser(output_path: Path) -> None:
     # Update loop back into the student, routed below the row so it cannot be
     # confused with the forward path. The caption sits on the line.
     axis.plot(
-        [90.5, 90.5, 33.5, 33.5],
+        [90.5, 90.5, 34.1, 34.1],
         [9.3, 4.6, 4.6, 10.2],
         color=TEAL, lw=1.3, solid_capstyle="round", solid_joinstyle="round",
         zorder=2,
     )
-    _arrow(axis, (33.5, 10.0), (33.5, 12.4), color=TEAL, lw=1.3)
+    _arrow(axis, (34.1, 10.0), (34.1, 12.4), color=TEAL, lw=1.3)
     axis.text(
         62, 4.6,
         "the update helps the next decision, never this one",
-        ha="center", va="center", fontsize=7.4, color=TEAL, zorder=6,
+        ha="center", va="center", fontsize=7.4 * TEXT_SCALE, color=TEAL, zorder=6,
         bbox={"facecolor": "white", "edgecolor": "none", "pad": 3},
     )
 

@@ -217,7 +217,7 @@ def write_figures(
     ordered = list(METHODS)
     positions = np.arange(len(ordered))
 
-    figure, axes = plt.subplots(1, 2, figsize=(8.2, 3.2), sharey=True)
+    figure, axes = plt.subplots(1, 2, figsize=(7.7, 3.0), sharey=True)
     panels = (
         (
             axes[0],
@@ -290,7 +290,7 @@ def write_figures(
         accuracy_by_step[key].append(float(row["cum_accuracy"]))
         regret_by_step[key].append(float(row["cum_regret"]))
 
-    figure, axes = plt.subplots(1, 2, figsize=(8.2, 3.3))
+    figure, axes = plt.subplots(1, 2, figsize=(7.7, 3.1))
     handles = []
     for method in ordered:
         steps = sorted(step for name, step in accuracy_by_step if name == method)

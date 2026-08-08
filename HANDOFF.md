@@ -241,8 +241,9 @@ back one section at a time on top of this render.
 
 The user prefers this article style over a product landing page. Preserve:
 
-- narrow reading column, with figures breaking out only modestly (`--wide` is
-  52rem against a 43rem text column) and captions aligned to the text column;
+- narrow reading column, with figures breaking out only slightly (`--wide` is
+  47rem against a 43rem text column, roughly the 6% ratio the reference site
+  uses) and centered captions constrained to the text column;
 - the story order: online continual learning first, bandit formulation second;
 - semantic headings, alt text, and reduced-motion handling;
 - precise, professional copy without playful metaphors.
@@ -271,8 +272,9 @@ method styling, and the site accent matches them.
 
 `run.py --figures-only` redraws the result plots from the stored artifacts in
 `outputs/bandit/`, so the published figures can be restyled without a GPU or a
-rerun. Plot text is sized for the 52rem display width: keep the figure widths
-near 8 inches so the labels stay legible next to 17px body text.
+rerun. Plot text is sized for the 47rem (752px) display width: keep figure
+widths near 7.7 inches so labels render around 11–12px, matching the reference
+site and sitting just under the 13.5px captions.
 
 The workflow runs the site builder and copies those four figures into `_site`.
 
