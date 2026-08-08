@@ -4,331 +4,342 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f7f4ee">
-  <meta name="description" content="An interactive essay on why online learning fits continual personalization when each action reveals only its own outcome.">
+  <meta name="description" content="Learning from the notification you did—or did not—send: online personalization under action-dependent feedback.">
   <link rel="canonical" href="https://lin826.github.io/Online-SFT-Demo/">
   <meta property="og:type" content="article">
-  <meta property="og:title" content="Learning from the notification you did—or did not—send">
-  <meta property="og:description" content="Why online learning is a natural fit for continual personalization under action-dependent feedback.">
+  <meta property="og:title" content="Learning From the Notification You Did—or Didn’t—Send">
+  <meta property="og:description" content="An online learning demo for continual personalization under action-dependent feedback.">
   <meta property="og:url" content="https://lin826.github.io/Online-SFT-Demo/">
   <meta property="og:image" content="https://lin826.github.io/Online-SFT-Demo/assets/og.png">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Learning from the notification you did—or did not—send">
-  <meta name="twitter:description" content="Why online learning is a natural fit for continual personalization under action-dependent feedback.">
+  <meta name="twitter:title" content="Learning From the Notification You Did—or Didn’t—Send">
+  <meta name="twitter:description" content="An online learning demo for continual personalization under action-dependent feedback.">
   <meta name="twitter:image" content="https://lin826.github.io/Online-SFT-Demo/assets/og.png">
-  <title>Learning from the notification you did—or did not—send</title>
+  <title>Learning From the Notification You Did—or Didn’t—Send</title>
   <link rel="stylesheet" href="styles.css">
-  <script src="app.js" defer></script>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "strict" });
+  </script>
 </head>
 <body>
-  <a class="skip-link" href="#article">Skip to article</a>
-  <div class="reading-progress" aria-hidden="true"><span id="reading-progress-bar"></span></div>
-
   <header class="site-header">
     <div class="site-header-inner">
-      <a class="site-title" href="#top">Online-SDFT</a>
-      <nav aria-label="Article links">
+      <a class="site-title" href="./">Online-SDFT</a>
+      <nav aria-label="Repository links">
         <a href="https://colab.research.google.com/github/lin826/Online-SFT-Demo/blob/main/online_sdft_bandit_demo.ipynb">Colab</a>
         <a href="https://github.com/lin826/Online-SFT-Demo">Code</a>
       </nav>
     </div>
   </header>
+  <main class="article">
+<h1>Learning From the Notification You Did—or Didn’t—Send</h1>
+<p><img alt="A notification stream enters a small on-device model; one route is executed while its factual feedback loops back to improve the next decision" src="figures/blog_teaser.png" /></p>
+<p><em>One notification. One real outcome. A better decision next time.</em></p>
+<p>At 10:47 p.m., a receipt lands on your phone. Should the assistant interrupt you, put it in tomorrow’s digest, or quietly archive it?</p>
+<p>The choice looks simple. Learning from it is not.</p>
+<p>If the assistant sends a push, it can observe whether you open, dismiss, or ignore that push. If it archives the receipt, <strong>there was no push</strong>—so it cannot later claim that you would have clicked one. The action changes what evidence can exist.</p>
+<p>That constraint is the heart of this demo. It is also why online personalization needs a different learning loop from ordinary batch training.</p>
+<blockquote>
+<p><strong>The idea in one sentence:</strong> a small model acts with the information available now; a teacher interprets only what actually happens; a tiny update helps future requests.</p>
+</blockquote>
+<h2>1. Start with one late-night receipt</h2>
+<p>Imagine that the model chooses <strong>ARCHIVE</strong>. The user does not open the inbox afterward.</p>
+<pre class="mermaid">flowchart TB
+    R[&quot;10:47 p.m. receipt&quot;] --&gt; S[&quot;Small on-device model&quot;]
+    S --&gt; I[&quot;INTERRUPT&quot;]
+    S --&gt; L[&quot;LATER&quot;]
+    S --&gt; A[&quot;ARCHIVE ✓&quot;]
+    I -. &quot;not executed&quot; .-&gt; PI[&quot;Push outcome unknown&quot;]
+    L -. &quot;not executed&quot; .-&gt; DI[&quot;Digest outcome unknown&quot;]
+    A --&gt; O[&quot;Observed: NO_OBSERVATION&quot;]
 
-  <main id="article">
-    <article class="essay">
-      <header class="hero" id="top">
-        <p class="eyebrow">Interactive essay</p>
-        <h1>Learning from the notification you did—or did not—send</h1>
-        <p class="dek">Continual personalization needs a learning loop that scores decisions while they are made. When each action reveals only its own outcome, that loop is online.</p>
-      </header>
+    classDef context fill:#E8F3FF,stroke:#2563EB,color:#172033,stroke-width:1.6px;
+    classDef unseen fill:#F2F5F9,stroke:#94A3B8,color:#475569,stroke-width:1.2px,stroke-dasharray:4 3;
+    classDef chosen fill:#FFF4E5,stroke:#D97706,color:#172033,stroke-width:1.8px;
+    classDef observed fill:#E7F7F3,stroke:#0F8A78,color:#172033,stroke-width:1.8px;
+    class R,S context;
+    class I,L,PI,DI unseen;
+    class A chosen;
+    class O observed;</pre>
+<p>What did the model learn? Not “archive was correct,” and not “the user would have ignored a push.” It learned one factual statement:</p>
+<blockquote>
+<p><strong>We archived this receipt, and the user did not go looking for it during the observation window.</strong></p>
+</blockquote>
+<p>That evidence is weak, but it is real. The two alternative outcomes remain unknown.</p>
+<p>Machine-learning researchers call this a <strong>contextual bandit</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>In plain English</th>
+<th>Bandit term</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The receipt, time, category, and device state</td>
+<td>Context</td>
+</tr>
+<tr>
+<td>Interrupt, later, or archive</td>
+<td>Actions</td>
+</tr>
+<tr>
+<td>What happens after the selected route</td>
+<td>Bandit feedback</td>
+</tr>
+<tr>
+<td>The cost of choosing worse than the best route</td>
+<td>Regret</td>
+</tr>
+</tbody>
+</table>
+<p>The model faces one stream of requests. It acts, receives feedback, updates, and continues. There is no clean training phase followed by a test phase. Every cold-start mistake and every exploratory action affects the user and counts in the final score.</p>
+<p>That is what <strong>online learning</strong> means here.</p>
+<h2>2. Why should the learning happen on device?</h2>
+<p>A generic notification model knows what an average person tends to open. Your phone needs to learn <em>you</em>:</p>
+<ul>
+<li>Work chat may be urgent on call and unwanted at dinner.</li>
+<li>Family messages may outrank high-importance work mail.</li>
+<li>A receipt may deserve a digest today and automatic archiving next month.</li>
+<li>These preferences can change without warning.</li>
+</ul>
+<p>Keeping a learner close to the user offers four practical benefits: private interaction history can stay local, decisions work offline, updates avoid a network round trip, and the model can use fresh device context.</p>
+<p>The trade-off is compute. Phones have tight memory, energy, and thermal budgets, and training is more expensive than inference. Research such as <a href="https://arxiv.org/abs/2007.11622">TinyTL</a> studies this bottleneck. A realistic edge learner therefore needs to be small—perhaps a compact language model or a parameter-efficient adapter—and update in very small batches.</p>
+<p>This demo uses
+<a href="https://huggingface.co/LiquidAI/LFM2.5-230M"><code>LiquidAI/LFM2.5-230M</code></a>,
+a compact causal language model designed for on-device use. Its base weights
+stay frozen; REINFORCE, Online-SFT, and Online-SDFT update a rank-4 LoRA adapter
+with 172,032 trainable parameters. This is an actual LLM experiment, although
+it is still a simulator—not a measurement of phone battery, latency, or thermal
+behavior.</p>
+<p>The Liquid model is the deployed student. The post-decision teacher in this
+controlled experiment is an explicit stochastic simulator policy, chosen so
+that readers can audit exactly which facts it uses. It never receives the
+evaluator&rsquo;s preferred action or hidden utility vector.</p>
+<h2>3. Why the familiar alternatives struggle</h2>
+<p>Return to the archived receipt. The only new record is:</p>
+<pre><code class="language-text">receipt at 10:47 p.m. → ARCHIVE → NO_OBSERVATION
+</code></pre>
+<p>Several familiar methods can store or score this record, but each throws away something useful.</p>
+<table>
+<thead>
+<tr>
+<th>Approach</th>
+<th>What it can do with this record</th>
+<th>Where the signal gets thin</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ICL / memory</td>
+<td>Put the record into a future prompt</td>
+<td>It has no successful answer to copy, and model weights do not change.</td>
+</tr>
+<tr>
+<td>REINFORCE</td>
+<td>Update from the chosen action’s scalar reward</td>
+<td>Archive silence is reward 0 here, so vanilla reward-only learning gets little direction.</td>
+</tr>
+<tr>
+<td>GRPO / RLOO</td>
+<td>Compare several generated decisions</td>
+<td>Only one route can be executed; the other candidates have no factual user outcomes.</td>
+</tr>
+<tr>
+<td>Online-SDFT</td>
+<td>Ask a teacher to interpret the factual record</td>
+<td>It still depends on a useful, calibrated teacher.</td>
+</tr>
+</tbody>
+</table>
+<p>These are limitations, not impossibility claims. ICL is excellent when memory contains relevant successes. REINFORCE can learn from negative rewards and variance-reduction baselines. <a href="https://arxiv.org/abs/2402.03300">GRPO</a> and <a href="https://arxiv.org/abs/2402.14740">RLOO</a> are effective when multiple samples can be meaningfully scored.</p>
+<p>The live interaction is the bottleneck. We can generate eight candidate notification routes, but the user experiences only one. <strong>Eight generated answers are not eight user outcomes.</strong></p>
+<p>Scalar reward is also not the only evidence a user produces. Feedback may be:</p>
+<ul>
+<li>explicit text: “Stop interrupting me for receipts”;</li>
+<li>behavior: open, dismiss, ignore, or revisit later;</li>
+<li>silence: no response during a relevant window.</li>
+</ul>
+<p>The current simulator uses structured behavioral outcomes and device telemetry, not free-form user comments. Text feedback is a natural extension of the same teacher interface, not part of the reported experiment.</p>
+<p>Silence is ambiguous, not automatically negative. The missing piece is an interpreter that can combine this evidence with context and express uncertainty.</p>
+<h2>4. Online-SDFT: act first, teach second</h2>
+<p>Online Soft-Distillation Fine-Tuning adds that interpreter as a post-decision <strong>teacher</strong>.</p>
+<p><img alt="Animated Online-SDFT loop: the student acts before feedback, then learns from a post-decision teacher distribution" src="figures/online_sdft_process.gif" /></p>
+<p><em>The left side is the live decision; the right side exists only after the selected action produces feedback.</em></p>
+<p>Each round has four steps:</p>
+<ol>
+<li><strong>Student acts.</strong> The small student sees the current context and its past. It does not see future feedback or privileged post-decision information.</li>
+<li><strong>One route executes.</strong> The environment creates an outcome only for that route.</li>
+<li><strong>Teacher interprets.</strong> Afterward, the teacher combines context, the chosen action, factual feedback, and permitted post-decision signals.</li>
+<li><strong>Student updates.</strong> One fresh record plus at most three recent records
+   update the student for the next request.</li>
+</ol>
+<p>For the late-night receipt, an illustrative teacher target might be:</p>
+<pre><code class="language-text">ARCHIVE    0.62
+LATER      0.31
+INTERRUPT  0.07
+</code></pre>
+<p>This is a <strong>soft target</strong>: a probability distribution rather than a single answer. It tells the student that archive looks best, later remains plausible, and interruption looks costly.</p>
+<p>Crucially, the teacher did not observe the two unchosen user outcomes. It is making a recommendation from its prior knowledge and the one factual record—not reading a hidden ground-truth demonstration. The demo’s scoring oracle is sealed away from both teacher and student.</p>
+<p>The complete loop is:</p>
+<pre><code class="language-text">initialize student and a short replay buffer
 
-      <nav class="toc" aria-label="On this page">
-        <a href="#receipt">One decision</a>
-        <a href="#why-online">Why online</a>
-        <a href="#device">On device</a>
-        <a href="#alternatives">Familiar methods</a>
-        <a href="#sdft">Online-SDFT</a>
-        <a href="#results">Experiment</a>
-        <a href="#limits">Limits</a>
-      </nav>
+for each request x_t, in arrival order:
+    a_t = epsilon_greedy(student(actions | x_t)) # no privileged z_t
+    score a_t before learning
 
-      <section id="receipt">
-        <h2>Start with one late-night receipt</h2>
-        <p>At 10:47&nbsp;p.m., a receipt lands on a phone. Should the assistant interrupt, put it in tomorrow’s digest, or archive it quietly?</p>
-        <p>The choice looks simple. Learning from it is not. If the assistant sends a push, it can observe whether that push is opened, dismissed, or ignored. If it archives the receipt, there was no push—so it cannot later claim that the user would have clicked one. <strong>The action changes what evidence can exist.</strong></p>
+    z_t = execute_only(a_t)                      # one factual outcome
+    q_t = teacher(actions | x_t, a_t, z_t)       # soft target, not oracle y*
 
-        <div class="panel decision-lab" id="decision-lab">
-          <div class="panel-head">
-            <div>
-              <p class="panel-label">Try it</p>
-              <h3>Choose a route before feedback appears</h3>
-            </div>
-            <button class="ghost-button" id="new-event" type="button">Next notification</button>
-          </div>
-
-          <div class="lab-context">
-            <div class="sender-avatar" id="lab-avatar" aria-hidden="true">R</div>
-            <div class="lab-message">
-              <p id="lab-title">Your receipt is ready</p>
-              <p id="lab-preview">Coffee order · $5.40</p>
-            </div>
-            <time id="lab-time">22:47</time>
-          </div>
-
-          <dl class="context-grid" aria-label="Visible notification context">
-            <div><dt>Category</dt><dd id="lab-category">receipt</dd></div>
-            <div><dt>Regime</dt><dd id="lab-regime">off-hours</dd></div>
-            <div><dt>Importance</dt><dd><span id="lab-importance">0.18</span><i><span id="importance-bar"></span></i></dd></div>
-            <div><dt>Deadline</dt><dd><span id="lab-deadline">0.05</span><i><span id="deadline-bar"></span></i></dd></div>
-            <div><dt>Affinity</dt><dd><span id="lab-affinity">0.24</span><i><span id="affinity-bar"></span></i></dd></div>
-            <div class="sealed"><dt>Hidden state</dt><dd>sealed until action</dd></div>
-          </dl>
-
-          <fieldset class="route-picker">
-            <legend>Commit to one route</legend>
-            <button type="button" data-lab-action="interrupt"><b>A</b><span><strong>Interrupt</strong><small>push now</small></span></button>
-            <button type="button" data-lab-action="later"><b>B</b><span><strong>Later</strong><small>next digest</small></span></button>
-            <button type="button" data-lab-action="archive"><b>C</b><span><strong>Archive</strong><small>stay silent</small></span></button>
-          </fieldset>
-
-          <div class="lab-pending" id="lab-pending" role="status">
-            <p><strong>No outcome is available yet.</strong> Select A, B, or C. Only the executed route will produce evidence.</p>
-          </div>
-
-          <div class="lab-reveal" id="lab-reveal" hidden aria-live="polite">
-            <article>
-              <p class="panel-label">Observed</p>
-              <strong id="feedback-title">No observable response</strong>
-              <p id="feedback-detail">Only the chosen route produced an outcome.</p>
-            </article>
-            <article>
-              <p class="panel-label">Unobserved</p>
-              <strong id="counterfactual-title">Alternate routes sealed</strong>
-              <p id="counterfactual-detail">The other two outcomes remain counterfactual.</p>
-            </article>
-            <article>
-              <p class="panel-label">Teacher soft target</p>
-              <div class="teacher-bars" id="teacher-bars"></div>
-              <p>A post-decision distribution, not an oracle label.</p>
-            </article>
-          </div>
-          <p class="panel-note">A simplified pedagogical example. Published results use the repository’s full stochastic simulator.</p>
-        </div>
-
-        <p>What can be learned after archiving with no later open? Not “archive was correct,” and not “the user would have ignored a push.” Only one factual statement:</p>
-        <blockquote>
-          <p>We archived this receipt, and the user did not go looking for it during the observation window.</p>
-        </blockquote>
-        <p>That evidence is weak, but it is real. Researchers call the setting a <em>contextual bandit</em>: one stream of contexts, one action per round, feedback only for the chosen action, and a cost for choosing worse than the best route (regret). There is no clean training phase followed by a separate test phase. Every cold-start mistake counts.</p>
-      </section>
-
-      <section id="why-online">
-        <h2>Why online learning fits continual personalization</h2>
-        <p>Preferences are not a fixed label set. Work chat can be urgent on call and unwanted at dinner. A receipt may deserve a digest today and automatic archiving next month. A model that adapts only in infrequent offline retrains misses the stream between those trainings.</p>
-        <p>Batch supervised learning often assumes that every example has an observable preferred action, and that quality can be summarized on a held-out exam after training. Notification routing breaks both assumptions: unselected routes never produce factual outcomes, and the decisions served <em>during</em> adaptation are the product users experience.</p>
-
-        <div class="panel protocol-lab" id="protocol-lab">
-          <div class="panel-head">
-            <div>
-              <p class="panel-label">Compare protocols</p>
-              <h3>Batch retrain versus online stream</h3>
-            </div>
-          </div>
-          <div class="protocol-tabs" role="tablist" aria-label="Learning protocol">
-            <button type="button" role="tab" id="protocol-tab-batch" aria-selected="false" aria-controls="protocol-panel" data-protocol="batch">Batch + held-out test</button>
-            <button type="button" role="tab" id="protocol-tab-online" aria-selected="true" aria-controls="protocol-panel" data-protocol="online">Online / prequential</button>
-          </div>
-          <div class="protocol-panel" id="protocol-panel" role="tabpanel" aria-labelledby="protocol-tab-online">
-            <ol class="protocol-steps" id="protocol-steps" aria-label="Protocol stages"></ol>
-            <div class="stream-board" id="stream-board" aria-label="Six incoming notifications"></div>
-            <p class="protocol-summary" id="protocol-summary"></p>
-          </div>
-          <p class="panel-note">Illustration only. It highlights where each protocol scores decisions; it is not the published benchmark.</p>
-        </div>
-
-        <p>That is what <strong>online learning</strong> means here: observe a request, act with currently available information, receive the factual outcome of that action, update for future requests, and accumulate quality on the way. Continual learning needs that same discipline whenever the world keeps moving after any fixed training snapshot.</p>
-      </section>
-
-      <section id="device">
-        <h2>Why keep the learner near the user?</h2>
-        <p>A generic notification model knows average open rates. A personal device needs a model of one person—and that person’s preferences can change without warning. Keeping a learner close to the user lets private history stay local, supports offline decisions, avoids a network round trip for every update, and can use fresh device context.</p>
-        <p>The trade-off is compute. Phones have tight memory, energy, and thermal budgets. A realistic edge learner therefore stays small and updates in very small batches. This demo uses <a href="https://huggingface.co/LiquidAI/LFM2.5-230M">LiquidAI/LFM2.5-230M</a>: base weights stay frozen; adaptive methods update a rank-4 LoRA adapter with 172,032 trainable parameters. It is a real language-model experiment inside a simulator, not a phone-battery measurement.</p>
-      </section>
-
-      <section id="alternatives">
-        <h2>Why familiar alternatives struggle here</h2>
-        <p>Return to the archived receipt with no organic open. Several methods can store or score that record, but each leaves useful signal on the table—especially when silence produces little reward, or when eight generated candidates still yield only one user outcome.</p>
-
-        <div class="panel method-explorer" id="method-explorer">
-          <div class="method-tabs" role="tablist" aria-label="Compared learning methods">
-            <button id="method-tab-base" type="button" role="tab" aria-selected="false" aria-controls="method-panel" tabindex="-1" data-method="base">Base</button>
-            <button id="method-tab-icl" type="button" role="tab" aria-selected="false" aria-controls="method-panel" tabindex="-1" data-method="icl">ICL</button>
-            <button id="method-tab-rag" type="button" role="tab" aria-selected="false" aria-controls="method-panel" tabindex="-1" data-method="rag">RAG</button>
-            <button id="method-tab-reinforce" type="button" role="tab" aria-selected="false" aria-controls="method-panel" tabindex="-1" data-method="reinforce">REINFORCE</button>
-            <button id="method-tab-sft" type="button" role="tab" aria-selected="false" aria-controls="method-panel" tabindex="-1" data-method="sft">Online-SFT</button>
-            <button id="method-tab-sdft" type="button" role="tab" aria-selected="true" aria-controls="method-panel" tabindex="0" data-method="sdft">Online-SDFT</button>
-          </div>
-          <div class="method-panel" id="method-panel" role="tabpanel" aria-labelledby="method-tab-sdft" aria-live="polite">
-            <div class="method-summary">
-              <p class="panel-label" id="method-family">Weights adapt online</p>
-              <h3 id="method-name">Online-SDFT</h3>
-              <p id="method-description">Distills the teacher’s complete soft action distribution into a rank-4 LoRA adapter after each executed action.</p>
-              <dl class="method-facts">
-                <div><dt>Current-round input</dt><dd id="method-input">Visible context only</dd></div>
-                <div><dt>Past signal</dt><dd id="method-signal">Post-decision teacher distribution</dd></div>
-                <div><dt>What changes</dt><dd id="method-change">172,032 LoRA parameters</dd></div>
-                <div><dt>Online accuracy</dt><dd><strong id="method-score">64.72%</strong><span class="score-track"><i id="method-score-bar" style="width:64.72%"></i></span></dd></div>
-                <div><dt>Cumulative regret ↓</dt><dd><strong id="method-regret" class="regret-value">36.24</strong><span class="score-track regret-track"><i id="method-regret-bar" style="width:31.34%"></i></span></dd></div>
-              </dl>
-            </div>
-            <figure class="signal-flow" id="signal-flow" aria-labelledby="signal-flow-caption">
-              <figcaption id="signal-flow-caption">Information channels available to the selected method.</figcaption>
-              <div class="signal-columns">
-                <div class="signal-col">
-                  <p class="signal-col-label">At serving time</p>
-                  <ul id="signal-serve" class="signal-list"></ul>
-                </div>
-                <div class="signal-arrow" aria-hidden="true"><span></span></div>
-                <div class="signal-col">
-                  <p class="signal-col-label">After executed <em>a<sub>t</sub></em></p>
-                  <ul id="signal-post" class="signal-list"></ul>
-                </div>
-                <div class="signal-arrow" aria-hidden="true"><span></span></div>
-                <div class="signal-col">
-                  <p class="signal-col-label">Adaptation</p>
-                  <ul id="signal-adapt" class="signal-list"></ul>
-                </div>
-              </div>
-              <p class="signal-legend" aria-hidden="true"><span class="state-used">Used</span><span class="state-observed">Observed only</span><span class="state-sealed">Sealed</span><span class="state-absent">Not used</span></p>
-            </figure>
-          </div>
-        </div>
-
-        <p>These are limitations, not impossibility claims. ICL helps when memory contains relevant successes. REINFORCE can learn from negative rewards. The live interaction remains the bottleneck: many generated candidates are still one user experience. Silence is ambiguous, not automatically negative. The missing piece is an interpreter that can combine sparse evidence with context and express uncertainty.</p>
-      </section>
-
-      <section id="sdft">
-        <h2>Online-SDFT: act first, teach second</h2>
-        <p>Online Soft-Distillation Fine-Tuning adds that interpreter as a post-decision teacher. The student must generate its own route without privileged state. Only afterward may the teacher combine context, the chosen action, factual feedback, and other permitted post-decision signals into a soft target.</p>
-
-        <div class="panel round-explorer" id="round-explorer">
-          <div class="panel-head">
-            <div>
-              <p class="panel-label">One causal round</p>
-              <h3 id="step-title">1. Observe public context</h3>
-            </div>
-            <button class="ghost-button play-button" id="round-play" type="button" aria-label="Play the online round">Play</button>
-          </div>
-          <div class="round-stage" data-phase="observe">
-            <div class="student-device">
-              <span class="device-label">Deployed student</span>
-              <strong>Liquid LFM</strong>
-              <div class="device-screen" id="student-screen">x<sub>t</sub><br><small>visible fields only</small></div>
-              <p>No hidden state. No current feedback.</p>
-            </div>
-            <div class="causal-wire" aria-hidden="true"><span></span></div>
-            <div class="world-node">
-              <span class="world-label">Environment + teacher</span>
-              <div class="world-content" id="world-screen"><b>sealed</b><small>waiting for an action</small></div>
-              <p>Privileged signals stay on this side.</p>
-            </div>
-          </div>
-          <ol class="step-tabs" aria-label="Online round steps">
-            <li><button type="button" data-round-step="0" aria-current="step"><span>1</span>Observe</button></li>
-            <li><button type="button" data-round-step="1"><span>2</span>Roll out</button></li>
-            <li><button type="button" data-round-step="2"><span>3</span>Execute</button></li>
-            <li><button type="button" data-round-step="3"><span>4</span>Teach</button></li>
-            <li><button type="button" data-round-step="4"><span>5</span>Update</button></li>
-          </ol>
-          <p class="step-explanation" id="step-explanation">The student receives only notification fields available at serving time.</p>
-        </div>
-
-        <pre class="pseudocode"><code><span>for</span> x_t <span>in</span> stream:
-    a_t = student.rollout(x_t)              <em># no privileged z</em>
-    score_pre_update(a_t)                   <em># evaluator only</em>
-    feedback_t = execute_only(a_t)          <em># one factual outcome</em>
-    q_t = teacher(x_t, a_t, z_t, feedback_t)
-    student.update_small_batch(q_t)         <em># soft target, online</em></code></pre>
-
-        <p>Unlike typical batch soft distillation, targets are created after each live action, requests arrive once in order, the student generates every served action, and success is measured while learning—not only after a training phase ends.</p>
-      </section>
-
-      <section id="results">
-        <h2>Learning while serving</h2>
-        <p>The reported experiment runs three paired streams of 240 requests across consecutive regimes: weekday → on-call → off-hours. Metrics are online accuracy (was the pre-update action the evaluator’s best route?) and cumulative regret (utility lost versus the best route, summed over the stream). The evaluator may use a hidden utility vector only for scoring; it never enters a prompt, teacher target, reward, or gradient.</p>
-
-        <div class="results-block">
-          <div class="result-stats">
-            <div><span class="big-result">64.72%</span><small>Online-SDFT accuracy</small></div>
-            <div><span class="big-result">36.24</span><small>cumulative regret ↓</small></div>
-          </div>
-          <div class="result-table-wrap">
-            <table>
-              <caption class="sr-only">Published online results for all six methods</caption>
-              <thead><tr><th scope="col">Method</th><th scope="col">Online accuracy</th><th scope="col">Cumulative regret ↓</th></tr></thead>
-              <tbody>
-                <tr><th scope="row">Base</th><td>37.08% <small>± 3.30</small></td><td>81.50 <small>± 2.24</small></td></tr>
-                <tr><th scope="row">ICL</th><td>37.50% <small>± 1.25</small></td><td>81.10 <small>± 1.37</small></td></tr>
-                <tr><th scope="row">RAG</th><td>38.75% <small>± 0.47</small></td><td>79.94 <small>± 7.38</small></td></tr>
-                <tr><th scope="row">REINFORCE</th><td>32.08% <small>± 1.70</small></td><td>115.65 <small>± 16.88</small></td></tr>
-                <tr><th scope="row">Online-SFT</th><td>41.94% <small>± 2.72</small></td><td>97.65 <small>± 13.23</small></td></tr>
-                <tr class="best-row"><th scope="row">Online-SDFT</th><td>64.72% <small>± 3.14</small></td><td>36.24 <small>± 1.66</small></td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <p class="fine-print">Mean over three paired seeds with 95% confidence intervals. A preliminary simulator study, not a production-scale claim.</p>
-
-        <figure>
-          <img src="figures/bandit_learning_curves.png" alt="Learning curves over 240 decisions. Online-SDFT reaches the highest running online accuracy and the lowest cumulative regret.">
-          <figcaption><b>Figure 1.</b> Running online accuracy and cumulative regret. Dashed markers indicate regime changes in the non-stationary stream.</figcaption>
-        </figure>
-
-        <p>REINFORCE receives one scalar from one rollout. In this simulator, archival silence often produces zero reward, and the policy increasingly archives—a low-variance choice that can accumulate evaluator regret. Online-SDFT can still update from a teacher distribution when there is little explicit user response. Relative to Online-SFT, keeping the complete soft target adds 22.78 accuracy points and removes 61.41 regret units on average.</p>
-
-        <figure>
-          <img src="figures/online_sdft_process.gif" alt="Animation of the Online-SDFT loop from context to student action, factual outcome, teacher distribution, and small online update.">
-          <figcaption><b>Figure 2.</b> One Online-SDFT interaction. The student never receives the privileged state used by the post-decision teacher.</figcaption>
-        </figure>
-      </section>
-
-      <section id="limits">
-        <h2>What this shows—and what it does not</h2>
-        <div class="claim-grid">
-          <div>
-            <span>Supported</span>
-            <p>Under a strict causal interaction loop, a soft post-decision teacher can train a small policy more effectively than hard teacher samples, short memory, or retrieval on these streams.</p>
-          </div>
-          <div>
-            <span>Supported</span>
-            <p>The implementation preserves the order: student rollout, one factual outcome, teacher, then online update for future requests.</p>
-          </div>
-          <div class="caution">
-            <span>Not established</span>
-            <p>Three seeds do not support a broad claim about all users, devices, or drifting environments.</p>
-          </div>
-          <div class="caution">
-            <span>Not established</span>
-            <p>The simulator’s utility weights are a declared product model, not a universal measure of notification quality.</p>
-          </div>
-        </div>
-        <blockquote>
-          <p>Act without privileged information. Observe only what the action caused. Learn from the teacher, not an oracle label. Let the update help only future requests.</p>
-        </blockquote>
-        <p>That is the difference between replaying a dataset and learning online. Continual personalization needs the second loop whenever preferences and contexts keep changing.</p>
-
-        <div class="end-links">
-          <a href="https://colab.research.google.com/github/lin826/Online-SFT-Demo/blob/main/online_sdft_bandit_demo.ipynb">Run the notebook in Colab</a>
-          <a href="https://github.com/lin826/Online-SFT-Demo/blob/main/docs/problem-setting.md">Problem setting</a>
-          <a href="https://github.com/lin826/Online-SFT-Demo/blob/main/docs/methods.md">Methods and prompts</a>
-          <a href="https://github.com/lin826/Online-SFT-Demo/blob/main/docs/evaluation.md">Regret calculation</a>
-          <a href="https://github.com/lin826/Online-SFT-Demo">GitHub repository</a>
-        </div>
-      </section>
-
-      <footer class="article-footer">
-        <p>Open research demo around LiquidAI/LFM2.5-230M for notification routing under action-dependent feedback.</p>
-      </footer>
-    </article>
+    replay.append((x_t, q_t))
+    batch = newest_record + up_to_3_recent_records
+    update student once                          # helps t+1, never t
+</code></pre>
+<p>The separation is explicit in code:
+<a href="https://github.com/lin826/Online-SFT-Demo/blob/main/online_sdft/environment.py">environment.py</a> owns the simulated world and
+teacher, <a href="https://github.com/lin826/Online-SFT-Demo/blob/main/online_sdft/methods.py">methods.py</a> owns the Liquid student and six
+algorithms, and <a href="https://github.com/lin826/Online-SFT-Demo/blob/main/online_sdft/experiment.py">experiment.py</a> enforces the causal
+ordering.</p>
+<h3>How is this different from ordinary SDFT?</h3>
+<table>
+<thead>
+<tr>
+<th>Typical batch soft distillation</th>
+<th>Online-SDFT in this demo</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Teacher targets exist in a fixed dataset</td>
+<td>A target is created after each live action</td>
+</tr>
+<tr>
+<td>Data can be shuffled for many epochs</td>
+<td>Requests arrive once, in order</td>
+</tr>
+<tr>
+<td>Student rollouts need not collect the data</td>
+<td>The student generates every action without privileged feedback</td>
+</tr>
+<tr>
+<td>Success means held-out accuracy after training</td>
+<td>Success means accuracy and low regret while learning</td>
+</tr>
+</tbody>
+</table>
+<p>Online-SFT provides the closest controlled comparison. It uses the same teacher and update timing but samples one hard teacher action. Online-SDFT keeps the full distribution, preserving relative preferences and uncertainty.</p>
+<h2>5. The experiment: learning while serving</h2>
+<p>Notification routing is a useful test bed because it is personal, preferences drift, interruption has a real cost, and each route reveals different feedback.</p>
+<p>The reported LLM experiment runs <strong>3 paired streams</strong>. Each stream contains
+<strong>240 requests</strong> across three consecutive regimes:</p>
+<pre><code class="language-text">weekday (80) → on-call (80) → off-hours (80)
+</code></pre>
+<p>All six methods see the same streams. Five execute the route with the highest
+LFM action-token probability plus 6% uniform exploration. REINFORCE must sample
+from its LFM policy because the policy-gradient estimator is on-policy:</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Adaptation mechanism</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Base</td>
+<td>Frozen Liquid LFM2.5-230M</td>
+</tr>
+<tr>
+<td>ICL</td>
+<td>Last 12 teacher samples enter the frozen LFM prompt</td>
+</tr>
+<tr>
+<td>RAG</td>
+<td>12 nearest past teacher samples enter the frozen LFM prompt</td>
+</tr>
+<tr>
+<td>REINFORCE</td>
+<td>Batch-one LoRA update from factual scalar reward only</td>
+</tr>
+<tr>
+<td>Online-SFT</td>
+<td>LoRA updates from one sampled hard teacher action</td>
+</tr>
+<tr>
+<td>Online-SDFT</td>
+<td>LoRA updates from the full teacher distribution</td>
+</tr>
+</tbody>
+</table>
+<p>The metrics are deliberately online:</p>
+<ul>
+<li><strong>Online accuracy:</strong> was this action the simulator’s best route, measured before feedback?</li>
+<li><strong>Cumulative regret:</strong> how much simulated utility was lost relative to the best route, summed over all 240 decisions?</li>
+</ul>
+<p>The hidden utility vector is available to the evaluator because this is a simulator. It is never used as a target or update signal. The <a href="https://github.com/lin826/Online-SFT-Demo/blob/main/docs/evaluation.md">evaluation guide</a> gives the exact calculation and explains the utility weights.</p>
+<h3>Result: soft online targets learn faster</h3>
+<p><img alt="Online accuracy and cumulative regret for all six methods" src="figures/bandit_accuracy.png" /></p>
+<p><em>Higher is better on the left; lower is better on the right. Error bars are 95% confidence intervals over paired streams.</em></p>
+<p>Online-SDFT reaches <strong>64.72% ± 3.14</strong> online accuracy with <strong>36.24 ± 1.66</strong>
+cumulative regret. RAG, the strongest frozen baseline by accuracy, reaches
+<strong>38.75% ± 0.47</strong> accuracy and <strong>79.94 ± 7.38</strong> regret.</p>
+<p>REINFORCE reaches <strong>32.08% ± 1.70</strong> accuracy and <strong>115.65 ± 16.88</strong> regret.
+It increasingly learns to archive: silence often returns reward zero, which is
+safer than a noisy negative push or digest reward but can disagree with the
+evaluator&rsquo;s fuller utility. REINFORCE cannot use that hidden utility vector.</p>
+<p>Relative to Online-SFT, keeping the complete teacher distribution adds
+<strong>22.78 accuracy points</strong> and removes <strong>61.41 regret units</strong> on average.
+Online-SDFT wins both metrics in all three paired streams. Three seeds make this
+a preliminary demonstration, not a production-scale statistical claim.</p>
+<h3>Result: the advantage grows during the stream</h3>
+<p><img alt="Cumulative online accuracy and regret over the 240-request stream" src="figures/bandit_learning_curves.png" /></p>
+<p><em>The dashed lines mark the shifts from weekday to on-call and from on-call to off-hours.</em></p>
+<p>The blue SDFT curve rises as interactions accumulate while its regret grows much
+more slowly. Its phase accuracy moves from <strong>52.50%</strong> during weekday requests to
+<strong>63.75%</strong> on call and <strong>77.92%</strong> off hours. These are not held-out test
+segments: each point records performance while the model is still adapting.</p>
+<h3>Three decisions from the learning trace</h3>
+<p><strong>Step 82 — an on-call monitoring incident.</strong> Base, ICL, RAG, and Online-SFT
+defer; REINFORCE archives; Online-SDFT interrupts. The push is dismissed. That
+single outcome does not retroactively change the fact that the action was
+scored before feedback.</p>
+<p><strong>Step 105 — another monitoring incident.</strong> REINFORCE again archives and sees
+<strong>NO_OBSERVATION</strong>. Online-SDFT interrupts and receives <strong>OPENED_PUSH</strong>; the
+remaining methods defer.</p>
+<p><strong>Step 113 — a third monitoring incident.</strong> Online-SDFT interrupts and receives
+<strong>OPENED_PUSH</strong>. The frozen methods and Online-SFT defer, while REINFORCE&rsquo;s
+reward-only policy archives and again receives no observation.</p>
+<p>These examples show the intended learning trajectory: not memorizing a universal “archive receipts” rule, but accumulating uncertain evidence and adjusting as context changes.</p>
+<p>You can experience the information constraint in the <a href="https://github.com/lin826/Online-SFT-Demo/blob/main/online_sdft_bandit_demo.ipynb">self-contained notebook</a>, which includes a short playable routing game. It also runs directly in <a href="https://colab.research.google.com/github/lin826/Online-SFT-Demo/blob/main/online_sdft_bandit_demo.ipynb">Google Colab</a>.</p>
+<h2>6. What this result does—and does not—show</h2>
+<p>The experiment shows that, under a strict causal interaction loop, a soft post-decision teacher can train a small policy more effectively than hard teacher samples, short memory, or retrieval.</p>
+<p>It does <strong>not</strong> yet show that:</p>
+<ul>
+<li>the teacher will be reliable for real users;</li>
+<li>an LLM can be fine-tuned safely within a phone’s energy budget;</li>
+<li>the simulator’s utility weights match a production notification product;</li>
+<li>exact counterfactual regret can be measured from ordinary deployment logs.</li>
+</ul>
+<p>A production study would measure LFM memory, latency, and energy on target phones;
+validate the teacher against consented interactions; test longer preference
+shifts and forgetting; and use randomized logging or controlled experiments for
+evaluation.</p>
+<p>The causal contract should remain:</p>
+<blockquote>
+<p><strong>Act without privileged information. Observe only what the action caused. Learn from the teacher, not an oracle label. Let the update help only future requests.</strong></p>
+</blockquote>
+<p>That is the difference between replaying a dataset and genuinely learning online.</p>
+<h2>Further reading</h2>
+<ul>
+<li>Ronald J. Williams, <a href="https://www.cs.utexas.edu/~shivaram/readings/b2hd-Williams1992.html">“Simple Statistical Gradient-Following Algorithms for Connectionist Reinforcement Learning”</a> (REINFORCE).</li>
+<li>DeepSeek-AI, <a href="https://arxiv.org/abs/2402.03300">“DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models”</a> (GRPO).</li>
+<li>Ahmadian et al., <a href="https://arxiv.org/abs/2402.14740">“Back to Basics: Revisiting REINFORCE Style Optimization for Learning from Human Feedback in LLMs”</a> (RLOO).</li>
+<li>Cai et al., <a href="https://arxiv.org/abs/2007.11622">“TinyTL: Reduce Memory, Not Parameters for Efficient On-Device Learning”</a>.</li>
+</ul>
   </main>
+  <footer class="site-footer">
+    <p>Source: <a href="https://github.com/lin826/Online-SFT-Demo/blob/main/BLOG.md">BLOG.md</a></p>
+  </footer>
 </body>
 </html>
