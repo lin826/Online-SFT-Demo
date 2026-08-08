@@ -1,4 +1,4 @@
-# Learning From the Notification You Did—or Didn’t—Send
+# On-device Online Learning via Self-Distillation
 
 ![A notification stream enters a small on-device model; one route is executed while its factual feedback loops back to improve the next decision](figures/blog_teaser.png)
 
@@ -13,10 +13,12 @@ such continual personalization is best treated as **online learning**—acting,
 observing, and updating on one chronological stream—and then shows what that
 requires when the environment only reveals the outcome of the action that was
 actually taken. We evaluate six adaptation mechanisms on a real
-230M-parameter language model and find that **Online-SDFT**, which distills a
-post-decision teacher’s full soft distribution into a small adapter, reaches
-**64.72% ± 3.14** online accuracy and **36.24 ± 1.66** cumulative regret, while
-the strongest frozen baseline reaches **38.75% ± 0.47** and **79.94 ± 7.38**.
+230M-parameter language model and find that **Online-SDFT**—an online form of
+[Self-Distillation Fine-Tuning](https://arxiv.org/abs/2601.19897) (SDFT), which
+distills a post-decision teacher’s full soft distribution into a small
+adapter—reaches **64.72% ± 3.14** online accuracy and **36.24 ± 1.66**
+cumulative regret, while the strongest frozen baseline reaches
+**38.75% ± 0.47** and **79.94 ± 7.38**.
 
 > **The idea in one sentence:** a small model acts with the information
 > available now; a teacher interprets only what actually happens; a tiny update
@@ -74,53 +76,29 @@ These two numbers reward a learner for being useful *during* adaptation, not
 merely for being good once adaptation is finished. That is the property
 continual personalization actually needs.
 
-Online learning is harder than it sounds, though, and the reason is not
-optimization. It is that in a real interaction loop, **the action decides what
-evidence can ever exist**.
+What makes it hard is not optimization. It is that a live interaction loop is
+stingy about evidence, and it is stingy in a particular way.
 
-## 2. One late-night receipt: the action decides the evidence
+## 2. The action decides what evidence exists
 
-At 10:47 p.m., a receipt lands on your phone. Should the assistant interrupt
-you, put it in tomorrow’s digest, or quietly archive it?
+A supervised learner is handed a label that exists no matter what the model
+answers. A deployed learner is handed something narrower: the consequence of
+the one thing it chose to do. Whatever the alternatives would have produced
+is never recorded, because the alternatives never happened.
 
-The choice looks simple. Learning from it is not.
+![Two panels: in supervised training every action carries a label; in deployment only the executed action produces an observation](figures/evidence_gap.png)
 
-If the assistant sends a push, it can observe whether you open, dismiss, or
-ignore that push. If it archives the receipt, **there was no push**—so it cannot
-later claim that you would have clicked one.
+*The supervised loss can compare every option. An interactive loss sees a single row.*
 
-Imagine that the model chooses **ARCHIVE**. The user does not open the inbox
-afterward.
+The asymmetry is easiest to see in systems that interrupt people. Send a push
+notification and you can observe whether it was opened, dismissed, or ignored.
+File the same item into tomorrow’s digest and no push exists, so no click on a
+push can ever be logged. Recommenders see engagement only for the items they
+surfaced; triage systems see outcomes only for the queue they routed a case to.
+In each case the system commits to a kind of evidence before it knows anything.
 
-```mermaid
-flowchart TB
-    R["10:47 p.m. receipt"] --> S["Small on-device model"]
-    S --> I["INTERRUPT"]
-    S --> L["LATER"]
-    S --> A["ARCHIVE ✓"]
-    I -. "not executed" .-> PI["Push outcome unknown"]
-    L -. "not executed" .-> DI["Digest outcome unknown"]
-    A --> O["Observed: NO_OBSERVATION"]
-
-    classDef context fill:#E8F3FF,stroke:#2563EB,color:#172033,stroke-width:1.6px;
-    classDef unseen fill:#F2F5F9,stroke:#94A3B8,color:#475569,stroke-width:1.2px,stroke-dasharray:4 3;
-    classDef chosen fill:#FFF4E5,stroke:#D97706,color:#172033,stroke-width:1.8px;
-    classDef observed fill:#E7F7F3,stroke:#0F8A78,color:#172033,stroke-width:1.8px;
-    class R,S context;
-    class I,L,PI,DI unseen;
-    class A chosen;
-    class O observed;
-```
-
-What did the model learn? Not “archive was correct,” and not “the user would
-have ignored a push.” It learned one factual statement:
-
-> **We archived this receipt, and the user did not go looking for it during the
-> observation window.**
-
-That evidence is weak, but it is real. The two alternative outcomes remain
-unknown. Formally, the environment reveals only the outcome indexed by the
-executed action,
+Formally, the environment reveals only the outcome indexed by the executed
+action,
 
 $$
 o_t \;=\; o_t\big(a_t\big),
@@ -128,19 +106,31 @@ o_t \;=\; o_t\big(a_t\big),
 \big\{\,o_t(a)\,\big\}_{a \neq a_t} \ \text{is never observed},
 $$
 
-which is exactly the structure of a **contextual bandit**:
+which is the standard **contextual bandit** structure:
 
 | In plain English | Bandit term |
 | --- | --- |
-| The receipt, time, category, and device state | Context $x_t$ |
-| Interrupt, later, or archive | Actions $a \in \{A, B, C\}$ |
-| What happens after the selected route | Bandit feedback $o_t(a_t)$ |
-| The cost of choosing worse than the best route | Regret $\mathcal{R}(T)$ |
+| Everything known before deciding | Context $x_t$ |
+| The available responses | Actions $a \in \{A, B, C\}$ |
+| What happened after the chosen one | Bandit feedback $o_t(a_t)$ |
+| The cost of not choosing the best one | Regret $\mathcal{R}(T)$ |
 
-So the formulation is not the starting point—it is the consequence. Once you
-accept that personalization runs on a live stream, partial feedback follows,
-and with it the requirement that the learner never train on an outcome its
-action did not cause.
+Two consequences shape the rest of this post.
+
+**The learner cannot be trained on what it did not do.** Any update that scores
+unexecuted alternatives is scoring the model’s own guesses about user
+behaviour, not user behaviour.
+
+**The evidence that does arrive is thin and often ambiguous.** Suppose an
+assistant archives a low-priority message and the person never goes looking for
+it. The record supports one statement—*we archived it, and nothing happened
+afterward*—and that statement is compatible with “good call” and with “they
+never found out.” Silence is not proof of a correct decision.
+
+So the bandit formulation is not a modelling choice made up front. It is what
+remains once personalization runs on a live stream, and it forces a specific
+requirement: the learner must never train on an outcome its action did not
+cause.
 
 ## 3. Why should the learning happen on device?
 
@@ -160,9 +150,9 @@ This demo uses
 [`LiquidAI/LFM2.5-230M`](https://huggingface.co/LiquidAI/LFM2.5-230M),
 a compact causal language model designed for on-device use. Its base weights
 stay frozen; REINFORCE, Online-SFT, and Online-SDFT update a rank-4 LoRA adapter
-with 172,032 trainable parameters. This is an actual LLM experiment, although
-it is still a simulator—not a measurement of phone battery, latency, or thermal
-behavior.
+with 172,032 trainable parameters. The requests and user responses come from a
+simulator, so what follows measures learning behaviour rather than battery,
+latency, or thermal load on real hardware.
 
 The student policy is the softmax over the model’s next-token logits
 $\ell_\theta$ restricted to the three single-token action codes:
@@ -187,14 +177,14 @@ $$
 while REINFORCE samples $a_t \sim p_{\theta_t}(\cdot \mid x_t)$ because its
 gradient estimator is on-policy.
 
-The Liquid model is the deployed student. The post-decision teacher in this
-controlled experiment is an explicit stochastic simulator policy, chosen so
-that readers can audit exactly which facts it uses. It never receives the
-evaluator's preferred action or hidden utility vector.
+The Liquid model is the deployed student. The post-decision teacher is an
+explicit stochastic simulator policy whose inputs are written down in code, so
+every fact it uses can be checked. It never receives the evaluator’s preferred
+action or hidden utility vector.
 
 ## 4. Why the familiar alternatives struggle
 
-Return to the archived receipt. The only new record is:
+Return to the archived message. The only new record is:
 
 ```text
 receipt at 10:47 p.m. → ARCHIVE → NO_OBSERVATION
@@ -210,9 +200,14 @@ something useful.
 | GRPO / RLOO | Compare several generated decisions | Only one route can be executed; the other candidates have no factual user outcomes. |
 | Online-SDFT | Ask a teacher to interpret the factual record | It still depends on a useful, calibrated teacher. |
 
-These are limitations, not impossibility claims. ICL is excellent when memory contains relevant successes. REINFORCE can learn from negative rewards and variance-reduction baselines. [GRPO](https://arxiv.org/abs/2402.03300) and [RLOO](https://arxiv.org/abs/2402.14740) are effective when multiple samples can be meaningfully scored.
-
-The live interaction is the bottleneck. We can generate eight candidate notification routes, but the user experiences only one. **Eight generated answers are not eight user outcomes.**
+Each of these methods is strong in its own setting. In-context learning works
+well when memory holds relevant successes; REINFORCE learns from informative
+rewards and variance-reduction baselines;
+[GRPO](https://arxiv.org/abs/2402.03300) and
+[RLOO](https://arxiv.org/abs/2402.14740) shine when several samples can be
+scored against each other. The bottleneck is the interaction, not the
+optimizer: a model can generate eight candidate routes, but the person
+experiences one. **Eight generated answers are not eight user outcomes.**
 
 Scalar reward is also not the only evidence a user produces. Feedback may be:
 
@@ -220,13 +215,28 @@ Scalar reward is also not the only evidence a user produces. Feedback may be:
 - behavior: open, dismiss, ignore, or revisit later;
 - silence: no response during a relevant window.
 
-The current simulator uses structured behavioral outcomes and device telemetry, not free-form user comments. Text feedback is a natural extension of the same teacher interface, not part of the reported experiment.
+The experiments below use structured behavioural outcomes and device telemetry;
+free-form text would enter through the same teacher interface.
 
-Silence is ambiguous, not automatically negative. The missing piece is an interpreter that can combine this evidence with context and express uncertainty.
+Silence is ambiguous rather than automatically negative. The missing piece is
+an interpreter that can combine thin evidence with context and express its own
+uncertainty.
 
 ## 5. Online-SDFT: act first, teach second
 
-Online Soft-Distillation Fine-Tuning adds that interpreter as a post-decision **teacher**.
+Self-Distillation Fine-Tuning (SDFT) supplies exactly that kind of interpreter.
+In the original formulation of
+[Shenfeld et al.](https://arxiv.org/abs/2601.19897)
+([project page](https://self-distillation.github.io/SDFT),
+[code](https://github.com/idanshen/Self-Distillation),
+[TRL trainer](https://huggingface.co/docs/trl/en/sdft_trainer)), a model learns
+on-policy from its own teacher: the same network, shown a privileged context
+the student does not get, re-scores the student’s output, and that
+teacher distribution is distilled back into the student. Learning stays on the
+student’s own trajectories, which is what keeps prior capabilities intact.
+
+Online-SDFT applies that idea one round at a time, with the privileged context
+being *what happened after the decision*.
 
 ![Animated Online-SDFT loop: the student acts before feedback, then learns from a post-decision teacher distribution](figures/online_sdft_process.gif)
 
@@ -287,7 +297,10 @@ $\mathcal{L}_{\text{SDFT}}$, $\mathcal{L}_{\text{SFT}}$, and
 $\mathcal{L}_{\text{RF}}$ is the heart of this study: same model, same stream,
 same timing, different amounts of surviving information.
 
-Crucially, the teacher did not observe the two unchosen user outcomes. It is making a recommendation from its prior knowledge and the one factual record—not reading a hidden ground-truth demonstration. The demo’s scoring oracle is sealed away from both teacher and student.
+The teacher is bound by the same evidence limit as the student: it never sees
+the two unchosen outcomes. Its recommendation comes from prior knowledge plus
+one factual record, not from a hidden ground-truth demonstration. The scoring
+oracle is sealed away from both.
 
 The complete loop is:
 
@@ -312,16 +325,23 @@ teacher, [methods.py](online_sdft/methods.py) owns the Liquid student and six
 algorithms, and [experiment.py](online_sdft/experiment.py) enforces the causal
 ordering.
 
-### How is this different from ordinary SDFT?
+### How this differs from SDFT as published
 
-| Typical batch soft distillation | Online-SDFT in this demo |
+| SDFT (Shenfeld et al.) | Online-SDFT here |
 | --- | --- |
-| Teacher targets exist in a fixed dataset | A target is created after each live action |
-| Data can be shuffled for many epochs | Requests arrive once, in order |
-| Student rollouts need not collect the data | The student generates every action without privileged feedback |
-| Success means held-out accuracy after training | Success means accuracy and low regret while learning |
+| The teacher is the student itself, conditioned on a demonstration | The teacher is a separate policy, conditioned on the realised outcome |
+| Privileged context is an expert demonstration supplied with the data | Privileged context is post-decision feedback the world produced |
+| A dataset of prompts can be revisited for many epochs | Each request arrives once, in order, and is answered before it can be studied |
+| Success is held-out accuracy after training | Success is accuracy and regret accumulated while learning |
 
-Online-SFT provides the closest controlled comparison. It uses the same teacher and update timing but samples one hard teacher action. Online-SDFT keeps the full distribution, preserving relative preferences and uncertainty.
+What carries over is the mechanism that matters: distil a full teacher
+distribution into the student, on the student’s own trajectories, instead of
+fitting a hard target chosen off-policy.
+
+Online-SFT is the closest controlled comparison in this study. It uses the same
+teacher and the same update timing but samples one hard teacher action.
+Online-SDFT keeps the full distribution, preserving relative preferences and
+uncertainty.
 
 ## 6. The experiment: learning while serving
 
@@ -349,7 +369,10 @@ The metrics are the prequential pair from Section 1: online accuracy
 $\mathrm{Acc}(T)$, measured before each update, and cumulative regret
 $\mathcal{R}(T)$ over all 240 decisions.
 
-The hidden utility vector $u_t$ is available to the evaluator because this is a simulator. It is never used as a target or update signal. The [evaluation guide](docs/evaluation.md) gives the exact calculation and explains the utility weights.
+A simulator can compute the hidden utility vector $u_t$, which is what makes
+exact regret measurable at all; no method ever receives it as a target or
+update signal. The [evaluation guide](docs/evaluation.md) gives the exact
+calculation and explains the utility weights.
 
 ### Result: soft online targets learn faster
 
@@ -367,9 +390,8 @@ safer than a noisy negative push or digest reward but can disagree with the
 evaluator's fuller utility. REINFORCE cannot use that hidden utility vector.
 
 Relative to Online-SFT, keeping the complete teacher distribution adds
-**22.78 accuracy points** and removes **61.41 regret units** on average.
-Online-SDFT wins both metrics in all three paired streams. Three seeds make this
-a preliminary demonstration, not a production-scale statistical claim.
+**22.78 accuracy points** and removes **61.41 regret units** on average, and
+Online-SDFT wins both metrics in all three paired streams.
 
 ### Result: the advantage grows during the stream
 
@@ -385,9 +407,8 @@ segments: each point records performance while the model is still adapting.
 ### Three decisions from the learning trace
 
 **Step 82 — an on-call monitoring incident.** Base, ICL, RAG, and Online-SFT
-defer; REINFORCE archives; Online-SDFT interrupts. The push is dismissed. That
-single outcome does not retroactively change the fact that the action was
-scored before feedback.
+defer; REINFORCE archives; Online-SDFT interrupts, and the push is dismissed.
+Every one of those decisions was already scored before its outcome arrived.
 
 **Step 105 — another monitoring incident.** REINFORCE again archives and sees
 **NO_OBSERVATION**. Online-SDFT interrupts and receives **OPENED_PUSH**; the
@@ -401,21 +422,25 @@ These examples show the intended learning trajectory: not memorizing a universal
 
 You can experience the information constraint in the [self-contained notebook](online_sdft_bandit_demo.ipynb), which includes a short playable routing game. It also runs directly in [Google Colab](https://colab.research.google.com/github/lin826/Online-SFT-Demo/blob/main/online_sdft_bandit_demo.ipynb).
 
-## 7. What this result does—and does not—show
+## 7. Scope and limits
 
-The experiment shows that, under a strict causal interaction loop, a soft post-decision teacher can train a small policy more effectively than hard teacher samples, short memory, or retrieval.
+Under a strict causal interaction loop, a soft post-decision teacher trains a
+small policy more effectively than hard teacher samples, short memory, or
+retrieval. That is the claim the experiment supports, over three paired streams
+of 240 requests each.
 
-It does **not** yet show that:
+Four things stay open:
 
-- the teacher will be reliable for real users;
-- an LLM can be fine-tuned safely within a phone’s energy budget;
-- the simulator’s utility weights match a production notification product;
-- exact counterfactual regret can be measured from ordinary deployment logs.
+- whether a teacher of this quality is available for real users;
+- whether an LLM can be fine-tuned inside a phone’s energy and thermal budget;
+- whether the simulator’s utility weights resemble a production notification product;
+- how to measure counterfactual regret from ordinary deployment logs, where the
+  hidden utility vector does not exist.
 
-A production study would measure LFM memory, latency, and energy on target phones;
+A production study would measure memory, latency, and energy on target phones;
 validate the teacher against consented interactions; test longer preference
-shifts and forgetting; and use randomized logging or controlled experiments for
-evaluation.
+shifts and forgetting; and rely on randomized logging or controlled experiments
+for evaluation.
 
 The causal contract should remain:
 
@@ -425,6 +450,7 @@ That is the difference between replaying a dataset and genuinely learning online
 
 ## Further reading
 
+- Shenfeld, Damani, Hübotter, and Agrawal, [“Self-Distillation Enables Continual Learning”](https://arxiv.org/abs/2601.19897) — the SDFT method this post adapts. [Project page](https://self-distillation.github.io/SDFT), [reference implementation](https://github.com/idanshen/Self-Distillation), and the [`SDFTTrainer`](https://huggingface.co/docs/trl/en/sdft_trainer) in TRL.
 - Ronald J. Williams, [“Simple Statistical Gradient-Following Algorithms for Connectionist Reinforcement Learning”](https://www.cs.utexas.edu/~shivaram/readings/b2hd-Williams1992.html) (REINFORCE).
 - DeepSeek-AI, [“DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models”](https://arxiv.org/abs/2402.03300) (GRPO).
 - Ahmadian et al., [“Back to Basics: Revisiting REINFORCE Style Optimization for Learning from Human Feedback in LLMs”](https://arxiv.org/abs/2402.14740) (RLOO).

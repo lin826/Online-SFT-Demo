@@ -1,9 +1,20 @@
-"""Notification-routing environment, rewards, and privileged teacher.
+"""Notification-routing environment, rewards, and privileged views.
 
 The environment owns the causal world: stream generation, action-dependent
-feedback, evaluator-only utilities, and the post-decision teacher. It exposes a
-separate :class:`StudentObservation` so learning methods cannot receive the
-privileged telemetry stored on :class:`Event`.
+feedback, and evaluator-only utilities. It exposes two disjoint projections of
+:class:`Event` so that neither the deployed methods nor the teacher can read
+state they are not entitled to.
+
+:class:`StudentObservation` is the pre-decision view. :class:`TeacherObservation`
+is the post-decision view: the same context plus the executed route, its
+realized outcome, and the latent interruptibility state. Neither ever contains
+:meth:`NotificationRoutingEnvironment.oracle_utilities`, which exists only to
+score the benchmark.
+
+The teacher itself is *not* defined here. It is a language model
+(:class:`online_sdft.methods.LMTeacher`) that reads a
+:class:`TeacherObservation`, so that no hand-written scoring function can
+encode the evaluator's preferences.
 """
 
 from __future__ import annotations
@@ -18,7 +29,6 @@ from .config import (
     CATEGORIES,
     PHASE_LENGTH,
     REGIMES,
-    TEACHER_TEMPERATURE,
 )
 
 

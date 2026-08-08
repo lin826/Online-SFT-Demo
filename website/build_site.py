@@ -188,8 +188,16 @@ def render_outline(outline: list[tuple[str, str]]) -> str:
       </nav>"""
 
 
+MERMAID_RUNTIME = """  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "strict" });
+  </script>
+"""
+
+
 def page_shell(title: str, body_html: str, outline_html: str) -> str:
     plain_title = re.sub(r"<[^>]+>", "", title)
+    mermaid_runtime = MERMAID_RUNTIME if 'class="mermaid"' in body_html else ""
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -217,11 +225,7 @@ def page_shell(title: str, body_html: str, outline_html: str) -> str:
       {{left: '$$', right: '$$', display: true}},
       {{left: '\\\\(', right: '\\\\)', display: false}}
     ], throwOnError: false}});"></script>
-  <script type="module">
-    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
-    mermaid.initialize({{ startOnLoad: true, theme: "neutral", securityLevel: "strict" }});
-  </script>
-</head>
+{mermaid_runtime}</head>
 <body>
   <header class="masthead">
     <div class="masthead-inner">
@@ -236,7 +240,7 @@ def page_shell(title: str, body_html: str, outline_html: str) -> str:
   <main>
     <header class="hero">
       <h1>{title}</h1>
-      <p class="hero-note">An online-learning study of continual personalization under action-dependent feedback</p>
+      <p class="hero-note">Learning from the notification you did—or didn’t—send</p>
       <div class="hero-links">
         <a href="{REPO}">Code</a>
         <a href="{COLAB}">Colab notebook</a>

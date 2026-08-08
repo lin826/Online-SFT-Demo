@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-"""Draw the article teaser: one request, three routes, one real outcome.
+"""Draw the article's hand-laid diagrams.
 
-The teaser deliberately reuses the palette and typography of the result
-figures so the top of the article does not look like stock artwork.
+Both figures reuse the palette and typography of the result plots so the
+article reads as one document:
+
+- ``blog_teaser.png``: one request, three routes, one real outcome;
+- ``evidence_gap.png``: what a label gives you versus what an action gives you.
 """
 
 from __future__ import annotations
@@ -18,7 +21,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OUTPUT = ROOT / "figures" / "blog_teaser.png"
+FIGURE_DIR = ROOT / "figures"
 
 INK = "#1f2328"
 MUTED = "#6b7280"
@@ -186,12 +189,99 @@ def draw_teaser(output_path: Path) -> None:
     plt.close(figure)
 
 
+def _evidence_panel(axis, title, subtitle, rows, *, executed=None):
+    axis.set_xlim(0, 100)
+    axis.set_ylim(0, 100)
+    axis.axis("off")
+    axis.text(
+        0, 96, title, ha="left", va="center",
+        fontsize=10.0 * TEXT_SCALE, color=INK, fontweight="bold",
+    )
+    axis.text(
+        0, 85, subtitle, ha="left", va="center",
+        fontsize=8.2 * TEXT_SCALE, color=MUTED,
+    )
+
+    for index, (action, outcome) in enumerate(rows):
+        y = 60 - index * 21
+        live = executed is None or action == executed
+        edge = ACCENT if (executed is not None and live) else LINE
+        _box(axis, 0, y - 7.5, 34, 15, fill="white", edge=edge, lw=1.0, radius=3)
+        _text(axis, 17, y, action, size=8.3,
+              color=ACCENT if (executed is not None and live) else (
+                  INK if live else FAINT
+              ))
+        if executed is not None and live:
+            _text(axis, 17, y - 12.5, "executed", size=7.2, color=ACCENT)
+        _arrow(
+            axis, (36, y), (46, y),
+            color=ACCENT if (executed is not None and live) else (
+                LINE if executed is None else "#dfe2e7"
+            ),
+            lw=1.4 if (executed is not None and live) else 1.0,
+            style="-" if live else (0, (3, 2.4)),
+        )
+        _box(
+            axis, 48, y - 7.5, 52, 15,
+            fill=ACCENT_SOFT if (executed is not None and live) else "#fafbfc",
+            edge=edge, lw=1.1 if (executed is not None and live) else 1.0, radius=3,
+        )
+        _text(axis, 74, y, outcome, size=8.1,
+              color=ACCENT if (executed is not None and live) else (
+                  INK if executed is None else FAINT
+              ))
+
+
+def draw_evidence_gap(output_path: Path) -> None:
+    matplotlib.rcParams.update(
+        {"font.family": "sans-serif", "font.sans-serif": FONT_STACK}
+    )
+    figure, axes = plt.subplots(1, 2, figsize=(7.1, 2.35))
+    _evidence_panel(
+        axes[0],
+        "Supervised training",
+        "the label exists whatever the model answers",
+        (
+            ("action A", "label known"),
+            ("action B", "label known"),
+            ("action C", "label known"),
+        ),
+    )
+    _evidence_panel(
+        axes[1],
+        "Acting in the world",
+        "only the executed action leaves a record",
+        (
+            ("action A", "never happened"),
+            ("action B", "never happened"),
+            ("action C", "outcome observed"),
+        ),
+        executed="action C",
+    )
+    figure.tight_layout(pad=0.4)
+    figure.subplots_adjust(wspace=0.22)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output_path, dpi=230, bbox_inches="tight", facecolor="white")
+    plt.close(figure)
+
+
+DIAGRAMS = {
+    "teaser": ("blog_teaser.png", draw_teaser),
+    "evidence": ("evidence_gap.png", draw_evidence_gap),
+}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--only", choices=sorted(DIAGRAMS))
+    parser.add_argument("--figure-dir", type=Path, default=FIGURE_DIR)
     args = parser.parse_args()
-    draw_teaser(args.output.resolve())
-    print(f"Wrote {args.output}")
+    names = [args.only] if args.only else sorted(DIAGRAMS)
+    for name in names:
+        filename, draw = DIAGRAMS[name]
+        path = (args.figure_dir / filename).resolve()
+        draw(path)
+        print(f"Wrote {path}")
 
 
 if __name__ == "__main__":
