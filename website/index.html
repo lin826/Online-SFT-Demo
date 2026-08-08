@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1726">
+  <meta name="description" content="A realistic online contextual-bandit benchmark for personalized notification routing with Liquid AI's LFM and Online-SDFT.">
+  <link rel="canonical" href="https://lin826.github.io/Online-SFT-Demo/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Online-SDFT · Learning when silence has no click">
+  <meta property="og:description" content="A causal, streaming benchmark for personalized notification routing with a real Liquid AI language model.">
+  <meta property="og:url" content="https://lin826.github.io/Online-SFT-Demo/">
+  <meta property="og:image" content="https://lin826.github.io/Online-SFT-Demo/assets/og.png">
+  <meta property="og:image:width" content="1536">
+  <meta property="og:image:height" content="1024">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Online-SDFT · Learning when silence has no click">
+  <meta name="twitter:description" content="A realistic online learning experiment for notification routing.">
+  <meta name="twitter:image" content="https://lin826.github.io/Online-SFT-Demo/assets/og.png">
+  <title>Online-SDFT for Notification Routing</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="shell nav-wrap">
+      <a class="wordmark" href="#top" aria-label="Online-SDFT home">
+        <span class="wordmark-mark" aria-hidden="true">OS</span>
+        <span>Online-SDFT</span>
+      </a>
+      <nav class="nav-links" aria-label="Primary navigation">
+        <a href="#setting">Problem</a>
+        <a href="#method">Method</a>
+        <a href="#results">Results</a>
+        <a href="#baselines">Baselines</a>
+      </nav>
+      <a class="button button-small button-outline" href="https://github.com/lin826/Online-SFT-Demo">GitHub <span aria-hidden="true">↗</span></a>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="top">
+      <div class="shell hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span> Real LLM · one causal stream · no train/test split</p>
+          <h1>Learning when <span>silence has no click.</span></h1>
+          <p class="hero-lede">An on-device language model routes each notification now, later, or never—then learns only from feedback the chosen route could actually reveal.</p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="https://colab.research.google.com/github/lin826/Online-SFT-Demo/blob/main/online_sdft_bandit_demo.ipynb">Run on a GPU in Colab <span aria-hidden="true">↗</span></a>
+            <a class="text-link" href="#setting">See why this is causal <span aria-hidden="true">↓</span></a>
+          </div>
+          <dl class="headline-stats" aria-label="Headline experiment statistics">
+            <div><dt>64.72%</dt><dd>online accuracy</dd></div>
+            <div><dt>36.24</dt><dd>cumulative regret</dd></div>
+            <div><dt>230M</dt><dd>parameter LFM</dd></div>
+          </dl>
+        </div>
+
+        <figure class="hero-visual">
+          <div class="visual-bar">
+            <span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span>
+            <p>one decision at a time</p>
+          </div>
+          <img src="figures/online_sdft_process.gif" alt="Animation showing the Online-SDFT cycle: observe context, route one notification, receive factual feedback, ask a privileged teacher, and update the student.">
+          <figcaption><span aria-hidden="true">●</span> Feedback arrives only after the action</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="section section-light" id="setting">
+      <div class="shell">
+        <div class="section-heading split-heading">
+          <div>
+            <p class="eyebrow">The counterfactual trap</p>
+            <h2>You cannot learn from an outcome that never happened.</h2>
+          </div>
+          <p>A logged dataset might say a user clicked a notification even when the model chose not to send it. A real device cannot observe that alternate world. Our simulator executes exactly one route and exposes only its factual consequence.</p>
+        </div>
+
+        <div class="route-grid" aria-label="Possible notification routes and observable feedback">
+          <article class="route-card route-interrupt">
+            <p class="route-code">A</p>
+            <h3>Interrupt now</h3>
+            <p>The alert is sent immediately.</p>
+            <div class="feedback-chip"><span>Observed</span> click, dismiss, or ignore</div>
+          </article>
+          <article class="route-card route-later">
+            <p class="route-code">B</p>
+            <h3>Deliver later</h3>
+            <p>The item enters the next digest.</p>
+            <div class="feedback-chip"><span>Observed</span> digest interaction</div>
+          </article>
+          <article class="route-card route-archive">
+            <p class="route-code">C</p>
+            <h3>Archive silently</h3>
+            <p>No notification is pushed.</p>
+            <div class="feedback-chip"><span>Observed</span> organic app open—or silence</div>
+          </article>
+        </div>
+
+        <div class="bandit-callout">
+          <div class="formula" aria-hidden="true">x<sub>t</sub> → a<sub>t</sub> → o<sub>t</sub>(a<sub>t</sub>) → update</div>
+          <div>
+            <h3>This is a contextual bandit, not batch classification.</h3>
+            <p>At round <em>t</em>, the agent sees context <em>x</em>, commits to one action <em>a</em>, observes only that action’s outcome, and must improve before round <em>t + 1</em>. Accuracy and regret are measured on those live, pre-update decisions.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-dark" id="method">
+      <div class="shell">
+        <div class="section-heading centered-heading">
+          <p class="eyebrow">Online-SDFT</p>
+          <h2>A richer learning signal from one real interaction.</h2>
+          <p>The student acts without privileged state. Afterward, a teacher can use legal post-decision context and factual feedback to describe a full distribution over better routes.</p>
+        </div>
+
+        <ol class="process-grid">
+          <li>
+            <span class="step-number">01</span>
+            <h3>Observe</h3>
+            <p>The LFM sees notification fields available on device—not hidden user intent.</p>
+          </li>
+          <li>
+            <span class="step-number">02</span>
+            <h3>Act</h3>
+            <p>It generates its own route, then the simulator executes only that route.</p>
+          </li>
+          <li>
+            <span class="step-number">03</span>
+            <h3>Distill</h3>
+            <p>A post-decision teacher returns probabilities over A, B, and C—not the ground-truth oracle.</p>
+          </li>
+          <li>
+            <span class="step-number">04</span>
+            <h3>Update</h3>
+            <p>A rank-4 LoRA adapter learns immediately in a small online batch.</p>
+          </li>
+        </ol>
+
+        <div class="boundary-card">
+          <p class="boundary-label">The information boundary</p>
+          <div class="boundary-grid">
+            <div>
+              <h3>Student at decision time</h3>
+              <p>Visible notification context <span class="allowed">✓</span></p>
+              <p>Its own past legal memory <span class="allowed">✓</span></p>
+              <p>Hidden user state <span class="blocked">×</span></p>
+              <p>Current feedback or oracle action <span class="blocked">×</span></p>
+            </div>
+            <div>
+              <h3>Teacher after execution</h3>
+              <p>Visible context and chosen action <span class="allowed">✓</span></p>
+              <p>Factual feedback from that route <span class="allowed">✓</span></p>
+              <p>Permitted privileged state <span class="allowed">✓</span></p>
+              <p>Evaluator’s utility vector <span class="blocked">×</span></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-light" id="results">
+      <div class="shell">
+        <div class="section-heading split-heading results-heading">
+          <div>
+            <p class="eyebrow">Prequential results</p>
+            <h2>Online-SDFT leads while it learns.</h2>
+          </div>
+          <p>Mean over three paired streams of 240 decisions. Every action is scored before its feedback or parameter update; lower cumulative regret is better.</p>
+        </div>
+
+        <div class="result-layout">
+          <div class="table-wrap">
+            <table>
+              <caption class="sr-only">Online accuracy and cumulative regret by method</caption>
+              <thead><tr><th scope="col">Method</th><th scope="col">Accuracy</th><th scope="col">Regret ↓</th></tr></thead>
+              <tbody>
+                <tr><th scope="row">Base</th><td>37.08%</td><td>81.50</td></tr>
+                <tr><th scope="row">ICL</th><td>37.50%</td><td>81.10</td></tr>
+                <tr><th scope="row">RAG</th><td>38.75%</td><td>79.94</td></tr>
+                <tr><th scope="row">REINFORCE</th><td>32.08%</td><td>115.65</td></tr>
+                <tr><th scope="row">Online-SFT</th><td>41.94%</td><td>97.65</td></tr>
+                <tr class="winner"><th scope="row"><span>Online-SDFT</span></th><td>64.72%</td><td>36.24</td></tr>
+              </tbody>
+            </table>
+            <p class="table-note">Accuracy intervals and full seed-level artifacts are available in the results guide.</p>
+          </div>
+          <figure class="chart-card">
+            <img src="figures/bandit_accuracy.png" alt="Two bar charts comparing all methods. Online-SDFT has the highest online accuracy and lowest cumulative regret.">
+            <figcaption>Real LFM2.5-230M student · 3 seeds · 720 decisions per method</figcaption>
+          </figure>
+        </div>
+
+        <figure class="wide-chart">
+          <img src="figures/bandit_learning_curves.png" alt="Learning curves over 240 online decisions showing accuracy and cumulative regret for all six methods.">
+          <figcaption>The benchmark measures the journey, not a held-out exam after the journey is over.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="section section-sand" id="baselines">
+      <div class="shell">
+        <div class="section-heading centered-heading dark-copy">
+          <p class="eyebrow">Strong causal baselines</p>
+          <h2>What does the same LFM see?</h2>
+          <p>Base, ICL, and RAG stay frozen. Online-SFT, REINFORCE, and Online-SDFT update the same small LoRA adapter. No method can peek at the current round’s outcome.</p>
+        </div>
+
+        <div class="method-strip" aria-label="Compared methods">
+          <span>Base</span><span>ICL</span><span>RAG</span><span>REINFORCE</span><span>Online-SFT</span><span class="active">Online-SDFT</span>
+        </div>
+
+        <div class="trace-card">
+          <div class="tabs" role="tablist" aria-label="Example baseline traces">
+            <button id="tab-icl" role="tab" aria-selected="true" aria-controls="panel-icl">ICL · recent memory</button>
+            <button id="tab-rag" role="tab" aria-selected="false" aria-controls="panel-rag" tabindex="-1">RAG · nearest memory</button>
+          </div>
+          <section id="panel-icl" class="trace-panel" role="tabpanel" aria-labelledby="tab-icl">
+            <div class="trace-copy">
+              <p class="trace-kicker">Seed 0 · decision 148</p>
+              <h3>ICL follows its 12 most recent teacher examples.</h3>
+              <p>Seven recent examples say “interrupt,” so the frozen LFM leans toward A—even though the current low-urgency social notification is better saved for later.</p>
+              <a href="https://github.com/lin826/Online-SFT-Demo/blob/main/docs/methods.md#worked-prompts-and-actual-lfm-responses">Inspect the complete prompt <span aria-hidden="true">↗</span></a>
+            </div>
+            <div class="model-response">
+              <p class="mono-label">current notification</p>
+              <code>social · 17:12 · on-call<br>importance 0.28 · deadline 0.10 · affinity 0.83</code>
+              <div class="prob-row"><span>A · interrupt</span><strong>51.27%</strong></div>
+              <div class="prob-bar"><span style="width:51.27%"></span></div>
+              <div class="prob-row"><span>B · later</span><strong>40.41%</strong></div>
+              <div class="prob-bar"><span style="width:40.41%"></span></div>
+              <div class="prob-row"><span>C · archive</span><strong>8.32%</strong></div>
+              <div class="prob-bar"><span style="width:8.32%"></span></div>
+              <p class="answer wrong">LFM response: <strong>A · INTERRUPT</strong></p>
+            </div>
+          </section>
+          <section id="panel-rag" class="trace-panel" role="tabpanel" aria-labelledby="tab-rag" hidden>
+            <div class="trace-copy">
+              <p class="trace-kicker">Seed 0 · decision 148</p>
+              <h3>RAG retrieves the 12 most similar past contexts.</h3>
+              <p>Its mixed-feature search finds relevant social, on-call records. With those examples, the same frozen LFM strongly prefers B—the evaluator’s best route for this round.</p>
+              <a href="https://github.com/lin826/Online-SFT-Demo/blob/main/docs/methods.md#worked-prompts-and-actual-lfm-responses">Inspect retrieval and prompt <span aria-hidden="true">↗</span></a>
+            </div>
+            <div class="model-response">
+              <p class="mono-label">current notification</p>
+              <code>social · 17:12 · on-call<br>importance 0.28 · deadline 0.10 · affinity 0.83</code>
+              <div class="prob-row"><span>A · interrupt</span><strong>11.82%</strong></div>
+              <div class="prob-bar"><span style="width:11.82%"></span></div>
+              <div class="prob-row"><span>B · later</span><strong>81.36%</strong></div>
+              <div class="prob-bar"><span style="width:81.36%"></span></div>
+              <div class="prob-row"><span>C · archive</span><strong>6.82%</strong></div>
+              <div class="prob-bar"><span style="width:6.82%"></span></div>
+              <p class="answer correct">LFM response: <strong>B · LATER</strong></p>
+            </div>
+          </section>
+        </div>
+
+        <aside class="reinforce-note">
+          <span class="note-mark" aria-hidden="true">!</span>
+          <div><h3>Why reward-only REINFORCE struggles here</h3><p>Each request permits one rollout, and silence often returns a harmless zero. With no teacher explanation and sparse reward, the policy drifts toward <strong>ARCHIVE</strong>—safe-looking behavior that accumulates high evaluator regret.</p></div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="cta-section">
+      <div class="shell cta-card">
+        <div>
+          <p class="eyebrow">Reproduce every decision</p>
+          <h2>Read the story. Then run the stream.</h2>
+          <p>The notebook is self-contained, GPU-ready, and includes a playable version of the notification-routing game.</p>
+        </div>
+        <div class="cta-actions">
+          <a class="button button-primary" href="https://colab.research.google.com/github/lin826/Online-SFT-Demo/blob/main/online_sdft_bandit_demo.ipynb">Open in Colab <span aria-hidden="true">↗</span></a>
+          <a class="button button-outline-light" href="https://github.com/lin826/Online-SFT-Demo/blob/main/BLOG.md">Read the blog draft</a>
+          <a class="button button-outline-light" href="https://github.com/lin826/Online-SFT-Demo/blob/main/docs/evaluation.md">Audit regret</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="shell footer-grid">
+      <div><p class="footer-brand">Online-SDFT</p><p>A research demo for causal, continual personalization on device.</p></div>
+      <div class="footer-links"><a href="https://github.com/lin826/Online-SFT-Demo">Source</a><a href="https://github.com/lin826/Online-SFT-Demo/blob/main/docs/problem-setting.md">Problem</a><a href="https://github.com/lin826/Online-SFT-Demo/blob/main/docs/results.md">Results</a><a href="https://huggingface.co/LiquidAI/LFM2.5-230M">Model</a></div>
+    </div>
+  </footer>
+</body>
+</html>

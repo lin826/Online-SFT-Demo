@@ -6,6 +6,8 @@ An online contextual-bandit demo for routing notifications as `INTERRUPT`,
 before feedback, learns from a simulated post-decision teacher, and is scored on
 the same drifting stream—there is no train/test split.
 
+**[Explore the interactive project website](https://lin826.github.io/Online-SFT-Demo/)**
+
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/lin826/Online-SFT-Demo/blob/main/online_sdft_bandit_demo.ipynb)
 
 For a full rerun, select **Runtime → Change runtime type → T4 GPU** in Colab,
