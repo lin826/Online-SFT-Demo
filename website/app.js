@@ -198,7 +198,7 @@ const roundSteps = [
   {
     phase: 'update', title: '5. Update a tiny adapter',
     student: 'LoRA ← q<sub>t</sub><br><small>172,032 parameters</small>', world: '<b>round complete</b><small>advance to xₜ₊₁</small>',
-    explanation: 'One small online update prepares the student for the next, never-repeated notification.',
+    explanation: 'One small online update prepares the student for the next notification in the stream.',
   },
 ];
 let roundStep = 0;

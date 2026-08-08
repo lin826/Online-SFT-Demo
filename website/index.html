@@ -7,17 +7,17 @@
   <meta name="description" content="A visual, interactive essay about causal online learning for personalized notification routing with Liquid AI's LFM and Online-SDFT.">
   <link rel="canonical" href="https://lin826.github.io/Online-SFT-Demo/">
   <meta property="og:type" content="article">
-  <meta property="og:title" content="The notification you didn't send has no click">
-  <meta property="og:description" content="An interactive essay about learning from one causal stream with Online-SDFT.">
+  <meta property="og:title" content="Online personalization under action-dependent feedback">
+  <meta property="og:description" content="An interactive causal evaluation of Online-SDFT for notification routing.">
   <meta property="og:url" content="https://lin826.github.io/Online-SFT-Demo/">
   <meta property="og:image" content="https://lin826.github.io/Online-SFT-Demo/assets/og.png">
   <meta property="og:image:width" content="1536">
   <meta property="og:image:height" content="1024">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="The notification you didn't send has no click">
-  <meta name="twitter:description" content="A causal online learning experiment with a real on-device language model.">
+  <meta name="twitter:title" content="Online personalization under action-dependent feedback">
+  <meta name="twitter:description" content="An interactive causal evaluation of Online-SDFT for notification routing.">
   <meta name="twitter:image" content="https://lin826.github.io/Online-SFT-Demo/assets/og.png">
-  <title>The notification you didn't send has no click · Online-SDFT</title>
+  <title>Online personalization under action-dependent feedback · Online-SDFT</title>
   <link rel="stylesheet" href="styles.css">
   <script src="app.js" defer></script>
 </head>
@@ -39,9 +39,9 @@
   <main id="article">
     <article>
       <header class="article-hero" id="top">
-        <p class="article-kicker">An interactive research note · August 2026</p>
-        <h1>The notification you didn’t send has no click.</h1>
-        <p class="dek">How can a small language model personalize itself online when it gets one action, one outcome, and no second chance? We built a causal notification-routing stream to find out.</p>
+        <p class="article-kicker">Interactive research report · August 2026</p>
+        <h1>Online personalization under action-dependent feedback.</h1>
+        <p class="dek">We evaluate how a small language model can adapt online when each request permits one action and reveals only the outcome produced by that action.</p>
         <div class="byline">
           <span>Online-SDFT Demo</span>
           <span>12 min read</span>
@@ -63,11 +63,11 @@
             </div>
             <div class="observed-outcome"><span class="outcome-pulse" aria-hidden="true"></span><strong>Observed</strong><small>clicked after 8 s</small></div>
           </div>
-          <figcaption><b>Figure 1.</b> The model commits to one route. Only that route produces factual feedback; the other two outcomes never happen.</figcaption>
+          <figcaption><b>Figure 1.</b> The policy selects one route. Feedback is observed only for the executed route; outcomes for the two unselected routes remain counterfactual.</figcaption>
         </figure>
 
         <div class="abstract">
-          <p class="abstract-label">In one paragraph</p>
+          <p class="abstract-label">Summary</p>
           <p>We compare six ways to adapt a real 230M-parameter Liquid language model during a drifting stream of notifications. Unlike a batch dataset, every decision changes what can be observed next. Online-SDFT lets the student act without privileged information, then distills a post-decision teacher’s <em>distribution</em> in tiny LoRA updates. Across three paired streams, it reaches <strong>64.72% online accuracy</strong> and <strong>36.24 cumulative regret</strong>—measured while learning, not after.</p>
         </div>
       </header>
@@ -75,8 +75,8 @@
       <div class="article-layout">
         <aside class="toc" aria-label="On this page">
           <p>On this page</p>
-          <a href="#problem">The missing outcome</a>
-          <a href="#play">Play one round</a>
+          <a href="#problem">Action-dependent feedback</a>
+          <a href="#play">Interactive decision</a>
           <a href="#bandit">Bandit formulation</a>
           <a href="#method">Online-SDFT</a>
           <a href="#baselines">Six learners</a>
@@ -87,33 +87,33 @@
 
         <div class="article-body">
           <section class="essay-section" id="problem">
-            <p class="section-number">01 · The missing outcome</p>
-            <h2>Silence is an action, not a label.</h2>
-            <p class="lead">Suppose your phone receives a social notification during an on-call shift. The router chooses <em>archive</em>, so nothing appears. Ten minutes later, the user opens the app. Was the silent choice good? Perhaps. But we cannot also know whether an immediate alert would have been clicked, dismissed, or resented.</p>
-            <p>A normal supervised dataset often stores a row and a “correct” route. That makes every route look observable. Production is harsher: the model chooses one route, reality executes it, and the alternatives become counterfactuals.</p>
+            <p class="section-number">01 · Action-dependent feedback</p>
+            <h2>Notification routing produces partially observed outcomes.</h2>
+            <p class="lead">Consider a social notification that arrives during an on-call shift. If the router archives it, no notification is displayed. A later organic app open is observable, but the response to an immediate push or delayed digest is not.</p>
+            <p>A supervised dataset may associate each context with a preferred route, implicitly treating all alternatives as observable. In deployment, the policy selects one route, the environment executes it, and outcomes under the unselected routes remain counterfactual.</p>
 
             <aside class="margin-note">
               <span>Why it matters</span>
-              Training on the click attached to an unsent notification would leak an impossible alternate outcome into the learner.
+              Training on a click associated with an unexecuted route would introduce counterfactual leakage into the learner.
             </aside>
 
             <blockquote>
-              <p>There is no click for the notification you did not send.</p>
-              <footer>The causal constraint behind the benchmark</footer>
+              <p>The learner must not receive outcomes associated with actions it did not execute.</p>
+              <footer>Causal information constraint</footer>
             </blockquote>
 
-            <p>Our environment therefore simulates an interaction, not a table lookup. It reveals the context, accepts exactly one action, samples only that action’s outcome, and then moves on. The student is judged on the decisions it actually served.</p>
+            <p>The environment therefore simulates sequential interaction rather than performing a labeled-row lookup. It reveals the context, accepts one action, samples only that action’s outcome, and advances the stream. Evaluation uses the decisions served by the policy before each update.</p>
           </section>
 
           <section class="essay-section" id="play">
-            <p class="section-number">02 · Try the decision yourself</p>
-            <h2>You get one chance. What should the phone do?</h2>
-            <p>The mini-lab below hides the user’s latent state, just as a deployed router would. Pick a route first. Only then will the route-specific feedback, post-decision teacher, and evaluator’s regret appear.</p>
+            <p class="section-number">02 · Interactive decision</p>
+            <h2>Select a route before observing feedback.</h2>
+            <p>The example below withholds latent user state at decision time, matching the deployed information boundary. After a route is selected, it reveals the route-specific feedback, post-decision teacher distribution, and evaluator-only regret.</p>
 
             <div class="interactive-bleed decision-lab" id="decision-lab">
               <div class="lab-topline">
                 <div>
-                  <p class="lab-eyebrow">Interactive sandbox</p>
+                  <p class="lab-eyebrow">Interactive causal example</p>
                   <h3>Notification <span id="lab-round">#1</span></h3>
                 </div>
                 <button class="quiet-button" id="new-event" type="button">New notification <span aria-hidden="true">↻</span></button>
@@ -146,7 +146,7 @@
 
               <div class="lab-pending" id="lab-pending" role="status">
                 <span class="sealed-icon" aria-hidden="true">?</span>
-                <p><strong>The outcome is still unknowable.</strong> Choose A, B, or C to execute one route.</p>
+                <p><strong>No outcome is available before execution.</strong> Select A, B, or C to execute one route.</p>
               </div>
 
               <div class="lab-reveal" id="lab-reveal" hidden aria-live="polite">
@@ -166,13 +166,13 @@
                   <p id="regret-detail">Best attainable utility minus chosen-route utility.</p>
                 </article>
               </div>
-              <p class="lab-disclaimer">This pedagogical sandbox uses a simplified deterministic utility model. Published numbers below come from the repository’s full stochastic simulator.</p>
+              <p class="lab-disclaimer">This illustrative example uses a simplified deterministic utility model. Published results below use the repository’s full stochastic simulator.</p>
             </div>
           </section>
 
           <section class="essay-section" id="bandit">
             <p class="section-number">03 · The formal problem</p>
-            <h2>A contextual bandit in one line.</h2>
+            <h2>Contextual-bandit formulation.</h2>
             <p>At round <em>t</em>, the router observes a context <em>x<sub>t</sub></em>, chooses one action <em>a<sub>t</sub></em>, and receives only the outcome caused by that action. Then the next notification arrives.</p>
 
             <div class="equation-card" role="img" aria-label="At time t, observe context, choose action, receive action-specific outcome and reward, then update the policy">
@@ -190,18 +190,18 @@
 
             <aside class="margin-note">
               <span>Prequential evaluation</span>
-              “Predict, then learn” measures service quality during adaptation. There is no held-out test set and no replay of the same request.
+              Prequential evaluation measures service quality during adaptation: each action is scored before its feedback or update. The protocol has no held-out test set and does not replay requests.
             </aside>
           </section>
 
           <section class="essay-section" id="method">
             <p class="section-number">04 · Online-SDFT</p>
-            <h2>Let the student act. Let the teacher explain afterward.</h2>
-            <p>Typical distillation often begins with a privileged demonstration and asks a student to imitate it. That would cheat here. Online-SDFT reverses the order: the unprivileged student rolls out its own route first; a teacher sees legal post-decision evidence second; a tiny LoRA adapter updates third.</p>
+            <h2>Student action precedes teacher feedback.</h2>
+            <p>Standard distillation may begin with a privileged demonstration and ask a student to imitate it. That ordering would violate this setting’s serving-time information boundary. Online-SDFT instead requires the unprivileged student to generate its route first; the teacher receives permitted post-decision evidence second; and a small LoRA adapter updates third.</p>
 
             <div class="interactive-bleed round-explorer" id="round-explorer">
               <div class="explorer-header">
-                <div><p class="lab-eyebrow">Step through one causal round</p><h3 id="step-title">1. Observe public context</h3></div>
+                <div><p class="lab-eyebrow">Inspect one causal round</p><h3 id="step-title">1. Observe public context</h3></div>
                 <button class="play-button" id="round-play" type="button" aria-label="Play the online round"><span aria-hidden="true">▶</span> Play</button>
               </div>
               <div class="round-stage" data-phase="observe">
@@ -235,12 +235,12 @@
     q_t = teacher(x_t, a_t, z_t, feedback_t)
     student.update_small_batch(q_t)         <em># soft target, online</em></code></pre>
 
-            <p>The teacher distribution <em>q<sub>t</sub></em> is richer than a scalar reward but weaker than an oracle. It can say, for example, “later is probably right, archive is plausible, interrupt is unlikely,” allowing learning even when a user gives no explicit reward.</p>
+            <p>The teacher distribution <em>q<sub>t</sub></em> contains more information than a scalar reward but does not expose the evaluator’s oracle. It may assign most probability to <em>later</em>, some to <em>archive</em>, and little to <em>interrupt</em>, enabling an update even when there is no explicit user reward.</p>
           </section>
 
           <section class="essay-section" id="baselines">
             <p class="section-number">05 · What the six learners know</p>
-            <h2>Same model, different learning signal.</h2>
+            <h2>One model, six adaptation mechanisms.</h2>
             <p>Every method uses the same Liquid LFM action-token probabilities. The comparison changes what can persist across rounds—not what is visible before the current action.</p>
 
             <div class="method-explorer" id="method-explorer">
@@ -270,7 +270,7 @@
             <div class="case-study">
               <div>
                 <p class="case-label">A real trace · seed 0 · decision 148</p>
-                <h3>Recent memory says interrupt. Similar memory says later.</h3>
+                <h3>Example selection changes the LFM decision.</h3>
                 <p>For the same low-urgency social notification, ICL’s last 12 examples contain seven “interrupt” labels. The frozen LFM outputs A with 51.27%. RAG retrieves similar social, on-call contexts instead and outputs B with 81.36%—the evaluator’s preferred route.</p>
               </div>
               <div class="trace-compare">
@@ -283,7 +283,7 @@
 
           <section class="essay-section" id="results">
             <p class="section-number">06 · Experiment</p>
-            <h2>The model is evaluated while it changes.</h2>
+            <h2>Prequential evaluation scores the policy during adaptation.</h2>
             <p>Each seed is one 240-event stream: 80 weekday decisions, then 80 on-call decisions, then 80 off-hours decisions. All methods receive paired streams and start fresh. Each action is scored before its feedback or update.</p>
 
             <div class="regime-ribbon" aria-label="Three sequential stream regimes">
@@ -316,11 +316,11 @@
 
             <figure class="figure-bleed plot-figure">
               <img src="figures/bandit_learning_curves.png" alt="Two learning curves over 240 decisions. Online-SDFT develops the highest running online accuracy and the lowest cumulative regret across the stream.">
-              <figcaption><b>Figure 2.</b> Running online accuracy and cumulative regret. Vertical regime changes make this a moving target, not a stationary test set.</figcaption>
+              <figcaption><b>Figure 2.</b> Running online accuracy and cumulative regret. Vertical markers indicate regime changes in the non-stationary stream.</figcaption>
             </figure>
 
-            <h3 class="subhead">Why does reward-only REINFORCE collapse?</h3>
-            <p>REINFORCE receives one scalar from one rollout. In this simulator, archival silence is often a harmless zero, while an intrusive push can be negative. The policy increasingly chooses <em>archive</em>: locally safe-looking behavior that stalls exploration and accumulates evaluator regret. Online-SDFT can still learn from descriptive teacher feedback when the user does nothing.</p>
+            <h3 class="subhead">Why does reward-only REINFORCE underperform?</h3>
+            <p>REINFORCE receives one scalar from one rollout. In this simulator, archival silence often produces zero reward, while an intrusive push can produce negative reward. The policy increasingly selects <em>archive</em>, a low-variance action that reduces effective exploration and accumulates evaluator regret. Online-SDFT can update from the teacher distribution even when there is no explicit user response.</p>
 
             <figure class="figure-bleed process-gif">
               <img src="figures/online_sdft_process.gif" alt="Animation of the Online-SDFT loop from context to student action, factual outcome, teacher distribution, and small online update.">
@@ -330,19 +330,19 @@
 
           <section class="essay-section" id="limits">
             <p class="section-number">07 · Interpretation</p>
-            <h2>What this experiment does—and does not—show.</h2>
+            <h2>Scope and limitations.</h2>
             <div class="claim-grid">
               <div><span>Supported</span><p>On these three paired simulator streams, Online-SDFT improves the quality of the decisions made during adaptation.</p></div>
               <div><span>Supported</span><p>The implementation preserves the causal order: student rollout, one factual outcome, teacher, then online update.</p></div>
               <div class="caution"><span>Not yet established</span><p>Three seeds are not enough for a broad claim about all users, devices, or drifting environments.</p></div>
               <div class="caution"><span>Not yet established</span><p>The simulator’s utility weights are a declared product model, not a universal measure of notification quality.</p></div>
             </div>
-            <p>The right next step is not a larger held-out test set. It is a larger collection of <em>paired online streams</em>, ablations of the teacher and reward design, and eventually a carefully instrumented real interaction study.</p>
+            <p>Further validation requires more <em>paired online streams</em>, ablations of the teacher and reward design, and a carefully instrumented real interaction study.</p>
           </section>
 
           <section class="essay-section" id="reproduce">
             <p class="section-number">08 · Reproduce it</p>
-            <h2>Inspect every boundary. Replay every decision.</h2>
+            <h2>Audit the information boundaries and reproduce every decision.</h2>
             <p>The notebook is self-contained: simulator, Liquid LFM policy, six learners, animation, prompts, plots, and audit checks live in one file. A Colab T4 GPU is the shortest path to a full rerun.</p>
             <div class="reproduce-card">
               <div>
