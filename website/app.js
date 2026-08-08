@@ -16,7 +16,7 @@ function updateReadingState() {
 
   let activeId = trackedSections[0]?.id;
   trackedSections.forEach((section) => {
-    if (section.getBoundingClientRect().top <= 180) activeId = section.id;
+    if (section.getBoundingClientRect().top <= 120) activeId = section.id;
   });
   tocLinks.forEach((link) => link.classList.toggle('active', link.getAttribute('href') === `#${activeId}`));
   scrollFrame = null;
@@ -27,8 +27,13 @@ window.addEventListener('scroll', () => {
 }, { passive: true });
 updateReadingState();
 
-// A deterministic pedagogical contextual-bandit sandbox.
+// Pedagogical contextual-bandit sandbox (opens on the late-night receipt).
 const scenarios = [
+  {
+    title: 'Your receipt is ready', preview: 'Coffee order · $5.40', avatar: 'R', time: '22:47',
+    category: 'receipt', regime: 'off-hours', importance: 0.18, deadline: 0.05, affinity: 0.24,
+    latentNeed: 0.12, interruptionCost: 0.78,
+  },
   {
     title: 'Manager mentioned you', preview: '“Could you review the launch blocker?”', avatar: 'M', time: '09:14',
     category: 'manager', regime: 'weekday', importance: 0.88, deadline: 0.81, affinity: 0.46,
@@ -45,16 +50,18 @@ const scenarios = [
     latentNeed: 0.94, interruptionCost: 0.58,
   },
   {
-    title: 'Your receipt is ready', preview: 'Coffee order · $5.40', avatar: 'R', time: '13:43',
-    category: 'receipt', regime: 'weekday', importance: 0.18, deadline: 0.05, affinity: 0.24,
-    latentNeed: 0.12, interruptionCost: 0.34,
-  },
-  {
     title: 'Calendar starts soon', preview: 'Design review begins in 12 minutes.', avatar: 'C', time: '15:48',
     category: 'calendar', regime: 'weekday', importance: 0.76, deadline: 0.91, affinity: 0.61,
     latentNeed: 0.79, interruptionCost: 0.28,
   },
 ];
+
+const routeLabels = { interrupt: 'Interrupt', later: 'Later', archive: 'Archive' };
+const alternateRoutes = {
+  interrupt: ['later', 'archive'],
+  later: ['interrupt', 'archive'],
+  archive: ['interrupt', 'later'],
+};
 
 let scenarioIndex = 0;
 let labCommitted = false;
@@ -62,22 +69,8 @@ const routeButtons = Array.from(document.querySelectorAll('[data-lab-action]'));
 const labPending = byId('lab-pending');
 const labReveal = byId('lab-reveal');
 
-function clamp(value, low = 0, high = 1) {
-  return Math.min(high, Math.max(low, value));
-}
-
 function formatProbability(value) {
   return `${Math.round(value * 100)}%`;
-}
-
-function evaluatorUtilities(scenario) {
-  const urgency = 0.45 * scenario.importance + 0.55 * scenario.deadline;
-  const relevance = 0.52 * scenario.affinity + 0.48 * scenario.latentNeed;
-  return {
-    interrupt: 0.82 * urgency + 0.34 * relevance - 0.72 * scenario.interruptionCost,
-    later: 0.48 * scenario.importance + 0.42 * relevance - 0.31 * scenario.deadline + 0.12,
-    archive: 0.46 * (1 - scenario.importance) + 0.25 * (1 - scenario.affinity) - 0.52 * scenario.deadline,
-  };
 }
 
 function factualFeedback(scenario, action) {
@@ -118,7 +111,6 @@ function teacherDistribution(scenario, action, feedbackTitle) {
 
 function renderScenario() {
   const scenario = scenarios[scenarioIndex];
-  byId('lab-round').textContent = `#${scenarioIndex + 1}`;
   byId('lab-title').textContent = scenario.title;
   byId('lab-preview').textContent = scenario.preview;
   byId('lab-avatar').textContent = scenario.avatar;
@@ -144,20 +136,16 @@ function commitLabAction(action) {
   const scenario = scenarios[scenarioIndex];
   const [feedbackTitle, feedbackDetail] = factualFeedback(scenario, action);
   const distribution = teacherDistribution(scenario, action, feedbackTitle);
-  const utilities = evaluatorUtilities(scenario);
-  const regret = Math.max(...Object.values(utilities)) - utilities[action];
+  const sealed = alternateRoutes[action].map((route) => routeLabels[route]).join(' and ');
 
   routeButtons.forEach((button) => {
     button.disabled = true;
     button.classList.toggle('selected', button.dataset.labAction === action);
   });
   byId('feedback-title').textContent = feedbackTitle;
-  byId('feedback-detail').textContent = `${feedbackDetail} The two alternate outcomes remain unobserved.`;
-  byId('lab-regret').textContent = Math.max(0, regret).toFixed(2);
-  const bestAction = Object.entries(utilities).sort((a, b) => b[1] - a[1])[0][0];
-  byId('regret-detail').textContent = bestAction === action
-    ? 'This route has the highest evaluator utility for the simulated round.'
-    : `The evaluator preferred ${bestAction}; its utility vector never becomes a learning signal.`;
+  byId('feedback-detail').textContent = `${feedbackDetail} Only ${routeLabels[action].toLowerCase()} was executed.`;
+  byId('counterfactual-title').textContent = `${sealed} unknown`;
+  byId('counterfactual-detail').textContent = 'Those routes were not executed, so their user outcomes do not exist as facts.';
   const labels = { interrupt: 'A', later: 'B', archive: 'C' };
   byId('teacher-bars').innerHTML = Object.entries(distribution).map(([route, value]) => (
     `<div class="teacher-bar"><span>${labels[route]}</span><i><span style="width:${value * 100}%"></span></i><b>${formatProbability(value)}</b></div>`
@@ -173,6 +161,80 @@ byId('new-event').addEventListener('click', () => {
 });
 renderScenario();
 
+// Batch retrain versus online / prequential protocol.
+const streamEvents = [
+  { id: 1, label: 'Receipt', tip: 'off-hours' },
+  { id: 2, label: 'Calendar', tip: 'weekday' },
+  { id: 3, label: 'Social', tip: 'drift begins' },
+  { id: 4, label: 'Monitor', tip: 'on-call' },
+  { id: 5, label: 'Manager', tip: 'urgent' },
+  { id: 6, label: 'Receipt', tip: 'new habit' },
+];
+
+const protocols = {
+  batch: {
+    steps: [
+      { title: 'Collect history', body: 'Assemble labeled routes from past logs.' },
+      { title: 'Train offline', body: 'Fit weights on a fixed training slice.' },
+      { title: 'Freeze the model', body: 'Deploy without updating between requests.' },
+      { title: 'Held-out exam', body: 'Report accuracy on a later test slice.' },
+    ],
+    cards: [
+      { cls: 'train', note: 'train' },
+      { cls: 'train', note: 'train' },
+      { cls: 'train', note: 'train' },
+      { cls: 'missed', note: 'served, unscored' },
+      { cls: 'test', note: 'test only' },
+      { cls: 'test', note: 'test only' },
+    ],
+    summary: 'Batch learning scores a held-out slice after training. Decisions served while preferences drift are often invisible to the reported metric, and labels for unchosen routes can invent counterfactual outcomes.',
+  },
+  online: {
+    steps: [
+      { title: 'Observe xₜ', body: 'See only the serving-time context.' },
+      { title: 'Act once', body: 'Commit to one route without privileged z.' },
+      { title: 'Factual feedback', body: 'Observe only the executed route’s outcome.' },
+      { title: 'Update for t+1', body: 'Score before learning; adapt for the next request.' },
+    ],
+    cards: [
+      { cls: 'live', note: 'score → update' },
+      { cls: 'live', note: 'score → update' },
+      { cls: 'live', note: 'score → update' },
+      { cls: 'live', note: 'score → update' },
+      { cls: 'live', note: 'score → update' },
+      { cls: 'live', note: 'score → update' },
+    ],
+    summary: 'Online (prequential) evaluation scores every served decision before its update. Drift becomes data, cold-start mistakes count, and learning quality is measured on the same stream users experience.',
+  },
+};
+
+const protocolTabs = Array.from(document.querySelectorAll('[data-protocol]'));
+const protocolSteps = byId('protocol-steps');
+const streamBoard = byId('stream-board');
+const protocolSummary = byId('protocol-summary');
+
+function activateProtocol(key) {
+  const protocol = protocols[key];
+  protocolSteps.innerHTML = protocol.steps.map((step) => (
+    `<li><strong>${step.title}</strong>${step.body}</li>`
+  )).join('');
+  streamBoard.innerHTML = streamEvents.map((event, index) => {
+    const card = protocol.cards[index];
+    return `<div class="stream-card ${card.cls}"><b>${event.label}</b>${event.tip}<small>${card.note}</small></div>`;
+  }).join('');
+  protocolSummary.textContent = protocol.summary;
+  protocolTabs.forEach((tab) => {
+    const selected = tab.dataset.protocol === key;
+    tab.setAttribute('aria-selected', String(selected));
+  });
+  byId('protocol-panel').setAttribute('aria-labelledby', `protocol-tab-${key}`);
+}
+
+protocolTabs.forEach((tab) => {
+  tab.addEventListener('click', () => activateProtocol(tab.dataset.protocol));
+});
+activateProtocol('online');
+
 // Step-through causal Online-SDFT round.
 const roundSteps = [
   {
@@ -182,18 +244,18 @@ const roundSteps = [
   },
   {
     phase: 'rollout', title: '2. Generate the student rollout',
-    student: 'π(A,B,C | x<sub>t</sub>)<br><small>choose B · LATER</small>', world: '<b>sealed</b><small>no current feedback yet</small>',
-    explanation: 'The LFM generates its own route without hidden user state z or a teacher demonstration.',
+    student: 'π(A,B,C | x<sub>t</sub>)<br><small>choose C · ARCHIVE</small>', world: '<b>sealed</b><small>no current feedback yet</small>',
+    explanation: 'The LFM generates its own route without hidden user state or a teacher demonstration.',
   },
   {
     phase: 'execute', title: '3. Execute exactly one route',
-    student: 'a<sub>t</sub> = B<br><small>committed</small>', world: '<b>digest opened</b><small>only B produced an outcome</small>',
-    explanation: 'Reality executes LATER. INTERRUPT and ARCHIVE outcomes are counterfactual and stay unknown.',
+    student: 'a<sub>t</sub> = C<br><small>committed</small>', world: '<b>no observation</b><small>only C produced an outcome</small>',
+    explanation: 'Reality executes ARCHIVE. Interrupt and digest outcomes remain counterfactual.',
   },
   {
     phase: 'teach', title: '4. Ask the post-decision teacher',
-    student: 'waiting<br><small>student cannot see z</small>', world: '<b>q = [.12, .81, .07]</b><small>x, action, z, factual feedback</small>',
-    explanation: 'The teacher returns a soft route distribution using legal post-decision evidence—not the evaluator’s oracle utilities.',
+    student: 'waiting<br><small>student cannot see z</small>', world: '<b>q = [.07, .31, .62]</b><small>x, action, z, factual feedback</small>',
+    explanation: 'The teacher returns a soft route distribution from legal post-decision evidence—not the evaluator’s oracle.',
   },
   {
     phase: 'update', title: '5. Update a tiny adapter',
@@ -224,7 +286,7 @@ function renderRoundStep(index) {
 function stopRoundPlayback() {
   if (roundTimer !== null) window.clearInterval(roundTimer);
   roundTimer = null;
-  roundPlay.innerHTML = '<span aria-hidden="true">▶</span> Play';
+  roundPlay.textContent = 'Play';
   roundPlay.setAttribute('aria-label', 'Play the online round');
 }
 
@@ -233,7 +295,7 @@ function toggleRoundPlayback() {
     stopRoundPlayback();
     return;
   }
-  roundPlay.innerHTML = '<span aria-hidden="true">Ⅱ</span> Pause';
+  roundPlay.textContent = 'Pause';
   roundPlay.setAttribute('aria-label', 'Pause the online round');
   renderRoundStep((roundStep + 1) % roundSteps.length);
   roundTimer = window.setInterval(() => renderRoundStep((roundStep + 1) % roundSteps.length), 1900);
@@ -427,8 +489,7 @@ function activateMethod(methodKey, focus = false) {
   renderSignalList(signalLists.post, method.flow.post);
   renderSignalList(signalLists.adapt, method.flow.adapt);
   byId('signal-flow-caption').textContent = (
-    `${method.name}: information channels at serving time, after the executed action, and during adaptation. `
-    + 'Sealed channels never enter the student prompt, replay, teacher target, reward, or gradient.'
+    `${method.name}: channels at serving time, after the executed action, and during adaptation.`
   );
   methodTabs.forEach((tab) => {
     const selected = tab.dataset.method === methodKey;

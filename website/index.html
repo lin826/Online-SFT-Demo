@@ -3,21 +3,19 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#f4f0e8">
-  <meta name="description" content="A visual, interactive essay about causal online learning for personalized notification routing with Liquid AI's LFM and Online-SDFT.">
+  <meta name="theme-color" content="#f7f4ee">
+  <meta name="description" content="An interactive essay on why online learning fits continual personalization when each action reveals only its own outcome.">
   <link rel="canonical" href="https://lin826.github.io/Online-SFT-Demo/">
   <meta property="og:type" content="article">
-  <meta property="og:title" content="Online personalization under action-dependent feedback">
-  <meta property="og:description" content="An interactive causal evaluation of Online-SDFT for notification routing.">
+  <meta property="og:title" content="Learning from the notification you did—or did not—send">
+  <meta property="og:description" content="Why online learning is a natural fit for continual personalization under action-dependent feedback.">
   <meta property="og:url" content="https://lin826.github.io/Online-SFT-Demo/">
   <meta property="og:image" content="https://lin826.github.io/Online-SFT-Demo/assets/og.png">
-  <meta property="og:image:width" content="1536">
-  <meta property="og:image:height" content="1024">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Online personalization under action-dependent feedback">
-  <meta name="twitter:description" content="An interactive causal evaluation of Online-SDFT for notification routing.">
+  <meta name="twitter:title" content="Learning from the notification you did—or did not—send">
+  <meta name="twitter:description" content="Why online learning is a natural fit for continual personalization under action-dependent feedback.">
   <meta name="twitter:image" content="https://lin826.github.io/Online-SFT-Demo/assets/og.png">
-  <title>Online personalization under action-dependent feedback · Online-SDFT</title>
+  <title>Learning from the notification you did—or did not—send</title>
   <link rel="stylesheet" href="styles.css">
   <script src="app.js" defer></script>
 </head>
@@ -25,11 +23,10 @@
   <a class="skip-link" href="#article">Skip to article</a>
   <div class="reading-progress" aria-hidden="true"><span id="reading-progress-bar"></span></div>
 
-  <header class="masthead">
-    <div class="masthead-inner">
-      <a class="publication" href="#top"><span class="publication-mark">OS</span><span>Online-SDFT</span></a>
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="site-title" href="#top">Online-SDFT</a>
       <nav aria-label="Article links">
-        <a href="https://github.com/lin826/Online-SFT-Demo/blob/main/BLOG.md">Blog draft</a>
         <a href="https://colab.research.google.com/github/lin826/Online-SFT-Demo/blob/main/online_sdft_bandit_demo.ipynb">Colab</a>
         <a href="https://github.com/lin826/Online-SFT-Demo">Code</a>
       </nav>
@@ -37,356 +34,300 @@
   </header>
 
   <main id="article">
-    <article>
-      <header class="article-hero" id="top">
-        <p class="article-kicker">Interactive research report · August 2026</p>
-        <h1>Online personalization under action-dependent feedback.</h1>
-        <p class="dek">We evaluate how a small language model can adapt online when each request permits one action and reveals only the outcome produced by that action.</p>
-        <div class="byline">
-          <span>Online-SDFT Demo</span>
-          <span>12 min read</span>
-          <span>LiquidAI/LFM2.5-230M</span>
-        </div>
-
-        <figure class="teaser-figure">
-          <div class="teaser-stage" aria-label="Animated illustration of one notification choosing one observable route">
-            <div class="notification-token"><span aria-hidden="true">●</span><strong>New notification</strong><small>manager · 09:14 · urgent</small></div>
-            <div class="route-fan" aria-hidden="true">
-              <span class="route-line route-line-a"></span>
-              <span class="route-line route-line-b"></span>
-              <span class="route-line route-line-c"></span>
-            </div>
-            <div class="teaser-routes">
-              <div class="teaser-route route-a"><b>A</b><span>interrupt</span></div>
-              <div class="teaser-route route-b"><b>B</b><span>later</span></div>
-              <div class="teaser-route route-c"><b>C</b><span>archive</span></div>
-            </div>
-            <div class="observed-outcome"><span class="outcome-pulse" aria-hidden="true"></span><strong>Observed</strong><small>clicked after 8 s</small></div>
-          </div>
-          <figcaption><b>Figure 1.</b> The policy selects one route. Feedback is observed only for the executed route; outcomes for the two unselected routes remain counterfactual.</figcaption>
-        </figure>
-
-        <div class="abstract">
-          <p class="abstract-label">Summary</p>
-          <p>We compare six ways to adapt a real 230M-parameter Liquid language model during a drifting stream of notifications. Unlike a batch dataset, every decision changes what can be observed next. Online-SDFT lets the student act without privileged information, then distills a post-decision teacher’s <em>distribution</em> in tiny LoRA updates. Across three paired streams, it reaches <strong>64.72% online accuracy</strong> and <strong>36.24 cumulative regret</strong>—measured while learning, not after.</p>
-        </div>
+    <article class="essay">
+      <header class="hero" id="top">
+        <p class="eyebrow">Interactive essay</p>
+        <h1>Learning from the notification you did—or did not—send</h1>
+        <p class="dek">Continual personalization needs a learning loop that scores decisions while they are made. When each action reveals only its own outcome, that loop is online.</p>
       </header>
 
-      <div class="article-layout">
-        <aside class="toc" aria-label="On this page">
-          <p>On this page</p>
-          <a href="#problem">Action-dependent feedback</a>
-          <a href="#play">Interactive decision</a>
-          <a href="#bandit">Bandit formulation</a>
-          <a href="#method">Online-SDFT</a>
-          <a href="#baselines">Six learners</a>
-          <a href="#results">Results</a>
-          <a href="#limits">What this proves</a>
-          <a href="#reproduce">Reproduce</a>
-        </aside>
+      <nav class="toc" aria-label="On this page">
+        <a href="#receipt">One decision</a>
+        <a href="#why-online">Why online</a>
+        <a href="#device">On device</a>
+        <a href="#alternatives">Familiar methods</a>
+        <a href="#sdft">Online-SDFT</a>
+        <a href="#results">Experiment</a>
+        <a href="#limits">Limits</a>
+      </nav>
 
-        <div class="article-body">
-          <section class="essay-section" id="problem">
-            <p class="section-number">01 · Action-dependent feedback</p>
-            <h2>Notification routing produces partially observed outcomes.</h2>
-            <p class="lead">Consider a social notification that arrives during an on-call shift. If the router archives it, no notification is displayed. A later organic app open is observable, but the response to an immediate push or delayed digest is not.</p>
-            <p>A supervised dataset may associate each context with a preferred route, implicitly treating all alternatives as observable. In deployment, the policy selects one route, the environment executes it, and outcomes under the unselected routes remain counterfactual.</p>
+      <section id="receipt">
+        <h2>Start with one late-night receipt</h2>
+        <p>At 10:47&nbsp;p.m., a receipt lands on a phone. Should the assistant interrupt, put it in tomorrow’s digest, or archive it quietly?</p>
+        <p>The choice looks simple. Learning from it is not. If the assistant sends a push, it can observe whether that push is opened, dismissed, or ignored. If it archives the receipt, there was no push—so it cannot later claim that the user would have clicked one. <strong>The action changes what evidence can exist.</strong></p>
 
-            <aside class="margin-note">
-              <span>Why it matters</span>
-              Training on a click associated with an unexecuted route would introduce counterfactual leakage into the learner.
-            </aside>
+        <div class="panel decision-lab" id="decision-lab">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">Try it</p>
+              <h3>Choose a route before feedback appears</h3>
+            </div>
+            <button class="ghost-button" id="new-event" type="button">Next notification</button>
+          </div>
 
-            <blockquote>
-              <p>The learner must not receive outcomes associated with actions it did not execute.</p>
-              <footer>Causal information constraint</footer>
-            </blockquote>
+          <div class="lab-context">
+            <div class="sender-avatar" id="lab-avatar" aria-hidden="true">R</div>
+            <div class="lab-message">
+              <p id="lab-title">Your receipt is ready</p>
+              <p id="lab-preview">Coffee order · $5.40</p>
+            </div>
+            <time id="lab-time">22:47</time>
+          </div>
 
-            <p>The environment therefore simulates sequential interaction rather than performing a labeled-row lookup. It reveals the context, accepts one action, samples only that action’s outcome, and advances the stream. Evaluation uses the decisions served by the policy before each update.</p>
-          </section>
+          <dl class="context-grid" aria-label="Visible notification context">
+            <div><dt>Category</dt><dd id="lab-category">receipt</dd></div>
+            <div><dt>Regime</dt><dd id="lab-regime">off-hours</dd></div>
+            <div><dt>Importance</dt><dd><span id="lab-importance">0.18</span><i><span id="importance-bar"></span></i></dd></div>
+            <div><dt>Deadline</dt><dd><span id="lab-deadline">0.05</span><i><span id="deadline-bar"></span></i></dd></div>
+            <div><dt>Affinity</dt><dd><span id="lab-affinity">0.24</span><i><span id="affinity-bar"></span></i></dd></div>
+            <div class="sealed"><dt>Hidden state</dt><dd>sealed until action</dd></div>
+          </dl>
 
-          <section class="essay-section" id="play">
-            <p class="section-number">02 · Interactive decision</p>
-            <h2>Select a route before observing feedback.</h2>
-            <p>The example below withholds latent user state at decision time, matching the deployed information boundary. After a route is selected, it reveals the route-specific feedback, post-decision teacher distribution, and evaluator-only regret.</p>
+          <fieldset class="route-picker">
+            <legend>Commit to one route</legend>
+            <button type="button" data-lab-action="interrupt"><b>A</b><span><strong>Interrupt</strong><small>push now</small></span></button>
+            <button type="button" data-lab-action="later"><b>B</b><span><strong>Later</strong><small>next digest</small></span></button>
+            <button type="button" data-lab-action="archive"><b>C</b><span><strong>Archive</strong><small>stay silent</small></span></button>
+          </fieldset>
 
-            <div class="interactive-bleed decision-lab" id="decision-lab">
-              <div class="lab-topline">
-                <div>
-                  <p class="lab-eyebrow">Interactive causal example</p>
-                  <h3>Notification <span id="lab-round">#1</span></h3>
-                </div>
-                <button class="quiet-button" id="new-event" type="button">New notification <span aria-hidden="true">↻</span></button>
-              </div>
+          <div class="lab-pending" id="lab-pending" role="status">
+            <p><strong>No outcome is available yet.</strong> Select A, B, or C. Only the executed route will produce evidence.</p>
+          </div>
 
-              <div class="lab-context">
-                <div class="sender-avatar" id="lab-avatar" aria-hidden="true">M</div>
-                <div class="lab-message">
-                  <p id="lab-title">Manager mentioned you</p>
-                  <p id="lab-preview">“Could you review the launch blocker?”</p>
-                </div>
-                <time id="lab-time">09:14</time>
-              </div>
+          <div class="lab-reveal" id="lab-reveal" hidden aria-live="polite">
+            <article>
+              <p class="panel-label">Observed</p>
+              <strong id="feedback-title">No observable response</strong>
+              <p id="feedback-detail">Only the chosen route produced an outcome.</p>
+            </article>
+            <article>
+              <p class="panel-label">Unobserved</p>
+              <strong id="counterfactual-title">Alternate routes sealed</strong>
+              <p id="counterfactual-detail">The other two outcomes remain counterfactual.</p>
+            </article>
+            <article>
+              <p class="panel-label">Teacher soft target</p>
+              <div class="teacher-bars" id="teacher-bars"></div>
+              <p>A post-decision distribution, not an oracle label.</p>
+            </article>
+          </div>
+          <p class="panel-note">A simplified pedagogical example. Published results use the repository’s full stochastic simulator.</p>
+        </div>
 
-              <dl class="context-grid" aria-label="Visible notification context">
-                <div><dt>Category</dt><dd id="lab-category">manager</dd></div>
-                <div><dt>Regime</dt><dd id="lab-regime">weekday</dd></div>
-                <div><dt>Importance</dt><dd><span id="lab-importance">0.88</span><i><span id="importance-bar"></span></i></dd></div>
-                <div><dt>Deadline</dt><dd><span id="lab-deadline">0.81</span><i><span id="deadline-bar"></span></i></dd></div>
-                <div><dt>Affinity</dt><dd><span id="lab-affinity">0.46</span><i><span id="affinity-bar"></span></i></dd></div>
-                <div class="sealed"><dt>Hidden user state</dt><dd>sealed until action</dd></div>
+        <p>What can be learned after archiving with no later open? Not “archive was correct,” and not “the user would have ignored a push.” Only one factual statement:</p>
+        <blockquote>
+          <p>We archived this receipt, and the user did not go looking for it during the observation window.</p>
+        </blockquote>
+        <p>That evidence is weak, but it is real. Researchers call the setting a <em>contextual bandit</em>: one stream of contexts, one action per round, feedback only for the chosen action, and a cost for choosing worse than the best route (regret). There is no clean training phase followed by a separate test phase. Every cold-start mistake counts.</p>
+      </section>
+
+      <section id="why-online">
+        <h2>Why online learning fits continual personalization</h2>
+        <p>Preferences are not a fixed label set. Work chat can be urgent on call and unwanted at dinner. A receipt may deserve a digest today and automatic archiving next month. A model that adapts only in infrequent offline retrains misses the stream between those trainings.</p>
+        <p>Batch supervised learning often assumes that every example has an observable preferred action, and that quality can be summarized on a held-out exam after training. Notification routing breaks both assumptions: unselected routes never produce factual outcomes, and the decisions served <em>during</em> adaptation are the product users experience.</p>
+
+        <div class="panel protocol-lab" id="protocol-lab">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">Compare protocols</p>
+              <h3>Batch retrain versus online stream</h3>
+            </div>
+          </div>
+          <div class="protocol-tabs" role="tablist" aria-label="Learning protocol">
+            <button type="button" role="tab" id="protocol-tab-batch" aria-selected="false" aria-controls="protocol-panel" data-protocol="batch">Batch + held-out test</button>
+            <button type="button" role="tab" id="protocol-tab-online" aria-selected="true" aria-controls="protocol-panel" data-protocol="online">Online / prequential</button>
+          </div>
+          <div class="protocol-panel" id="protocol-panel" role="tabpanel" aria-labelledby="protocol-tab-online">
+            <ol class="protocol-steps" id="protocol-steps" aria-label="Protocol stages"></ol>
+            <div class="stream-board" id="stream-board" aria-label="Six incoming notifications"></div>
+            <p class="protocol-summary" id="protocol-summary"></p>
+          </div>
+          <p class="panel-note">Illustration only. It highlights where each protocol scores decisions; it is not the published benchmark.</p>
+        </div>
+
+        <p>That is what <strong>online learning</strong> means here: observe a request, act with currently available information, receive the factual outcome of that action, update for future requests, and accumulate quality on the way. Continual learning needs that same discipline whenever the world keeps moving after any fixed training snapshot.</p>
+      </section>
+
+      <section id="device">
+        <h2>Why keep the learner near the user?</h2>
+        <p>A generic notification model knows average open rates. A personal device needs a model of one person—and that person’s preferences can change without warning. Keeping a learner close to the user lets private history stay local, supports offline decisions, avoids a network round trip for every update, and can use fresh device context.</p>
+        <p>The trade-off is compute. Phones have tight memory, energy, and thermal budgets. A realistic edge learner therefore stays small and updates in very small batches. This demo uses <a href="https://huggingface.co/LiquidAI/LFM2.5-230M">LiquidAI/LFM2.5-230M</a>: base weights stay frozen; adaptive methods update a rank-4 LoRA adapter with 172,032 trainable parameters. It is a real language-model experiment inside a simulator, not a phone-battery measurement.</p>
+      </section>
+
+      <section id="alternatives">
+        <h2>Why familiar alternatives struggle here</h2>
+        <p>Return to the archived receipt with no organic open. Several methods can store or score that record, but each leaves useful signal on the table—especially when silence produces little reward, or when eight generated candidates still yield only one user outcome.</p>
+
+        <div class="panel method-explorer" id="method-explorer">
+          <div class="method-tabs" role="tablist" aria-label="Compared learning methods">
+            <button id="method-tab-base" type="button" role="tab" aria-selected="false" aria-controls="method-panel" tabindex="-1" data-method="base">Base</button>
+            <button id="method-tab-icl" type="button" role="tab" aria-selected="false" aria-controls="method-panel" tabindex="-1" data-method="icl">ICL</button>
+            <button id="method-tab-rag" type="button" role="tab" aria-selected="false" aria-controls="method-panel" tabindex="-1" data-method="rag">RAG</button>
+            <button id="method-tab-reinforce" type="button" role="tab" aria-selected="false" aria-controls="method-panel" tabindex="-1" data-method="reinforce">REINFORCE</button>
+            <button id="method-tab-sft" type="button" role="tab" aria-selected="false" aria-controls="method-panel" tabindex="-1" data-method="sft">Online-SFT</button>
+            <button id="method-tab-sdft" type="button" role="tab" aria-selected="true" aria-controls="method-panel" tabindex="0" data-method="sdft">Online-SDFT</button>
+          </div>
+          <div class="method-panel" id="method-panel" role="tabpanel" aria-labelledby="method-tab-sdft" aria-live="polite">
+            <div class="method-summary">
+              <p class="panel-label" id="method-family">Weights adapt online</p>
+              <h3 id="method-name">Online-SDFT</h3>
+              <p id="method-description">Distills the teacher’s complete soft action distribution into a rank-4 LoRA adapter after each executed action.</p>
+              <dl class="method-facts">
+                <div><dt>Current-round input</dt><dd id="method-input">Visible context only</dd></div>
+                <div><dt>Past signal</dt><dd id="method-signal">Post-decision teacher distribution</dd></div>
+                <div><dt>What changes</dt><dd id="method-change">172,032 LoRA parameters</dd></div>
+                <div><dt>Online accuracy</dt><dd><strong id="method-score">64.72%</strong><span class="score-track"><i id="method-score-bar" style="width:64.72%"></i></span></dd></div>
+                <div><dt>Cumulative regret ↓</dt><dd><strong id="method-regret" class="regret-value">36.24</strong><span class="score-track regret-track"><i id="method-regret-bar" style="width:31.34%"></i></span></dd></div>
               </dl>
-
-              <fieldset class="route-picker">
-                <legend>Commit to one route</legend>
-                <button type="button" data-lab-action="interrupt"><b>A</b><span><strong>Interrupt</strong><small>push now</small></span></button>
-                <button type="button" data-lab-action="later"><b>B</b><span><strong>Later</strong><small>next digest</small></span></button>
-                <button type="button" data-lab-action="archive"><b>C</b><span><strong>Archive</strong><small>stay silent</small></span></button>
-              </fieldset>
-
-              <div class="lab-pending" id="lab-pending" role="status">
-                <span class="sealed-icon" aria-hidden="true">?</span>
-                <p><strong>No outcome is available before execution.</strong> Select A, B, or C to execute one route.</p>
-              </div>
-
-              <div class="lab-reveal" id="lab-reveal" hidden aria-live="polite">
-                <article>
-                  <p class="reveal-label">Factual feedback</p>
-                  <strong id="feedback-title">Clicked after 8 seconds</strong>
-                  <p id="feedback-detail">Only the interrupt outcome was sampled.</p>
-                </article>
-                <article>
-                  <p class="reveal-label">Teacher after the action</p>
-                  <div class="teacher-bars" id="teacher-bars"></div>
-                  <p>The student learns this soft distribution—not an oracle label.</p>
-                </article>
-                <article>
-                  <p class="reveal-label">Evaluator only</p>
-                  <strong>Instant regret: <span id="lab-regret">0.00</span></strong>
-                  <p id="regret-detail">Best attainable utility minus chosen-route utility.</p>
-                </article>
-              </div>
-              <p class="lab-disclaimer">This illustrative example uses a simplified deterministic utility model. Published results below use the repository’s full stochastic simulator.</p>
             </div>
-          </section>
-
-          <section class="essay-section" id="bandit">
-            <p class="section-number">03 · The formal problem</p>
-            <h2>Contextual-bandit formulation.</h2>
-            <p>At round <em>t</em>, the router observes a context <em>x<sub>t</sub></em>, chooses one action <em>a<sub>t</sub></em>, and receives only the outcome caused by that action. Then the next notification arrives.</p>
-
-            <div class="equation-card" role="img" aria-label="At time t, observe context, choose action, receive action-specific outcome and reward, then update the policy">
-              <span>x<sub>t</sub></span><i>observe</i><b>→</b>
-              <span>a<sub>t</sub> ∼ π(·|x<sub>t</sub>)</span><i>commit</i><b>→</b>
-              <span>o<sub>t</sub>(a<sub>t</sub>), r<sub>t</sub></span><i>one outcome</i><b>→</b>
-              <span>π<sub>t+1</sub></span><i>update</i>
-            </div>
-
-            <p>The evaluator may simulate utilities for all three actions to compute regret, but those values stay behind a strict information boundary. They never enter the student, its prompt, its memory, or the teacher.</p>
-            <div class="definition-pair">
-              <div><span>Online accuracy</span><p>Was the route chosen <em>before learning on this round</em> the evaluator’s best route?</p></div>
-              <div><span>Cumulative regret</span><p>How much simulated utility was lost versus the best route, summed over the stream?</p></div>
-            </div>
-
-            <aside class="margin-note">
-              <span>Prequential evaluation</span>
-              Prequential evaluation measures service quality during adaptation: each action is scored before its feedback or update. The protocol has no held-out test set and does not replay requests.
-            </aside>
-          </section>
-
-          <section class="essay-section" id="method">
-            <p class="section-number">04 · Online-SDFT</p>
-            <h2>Student action precedes teacher feedback.</h2>
-            <p>Standard distillation may begin with a privileged demonstration and ask a student to imitate it. That ordering would violate this setting’s serving-time information boundary. Online-SDFT instead requires the unprivileged student to generate its route first; the teacher receives permitted post-decision evidence second; and a small LoRA adapter updates third.</p>
-
-            <div class="interactive-bleed round-explorer" id="round-explorer">
-              <div class="explorer-header">
-                <div><p class="lab-eyebrow">Inspect one causal round</p><h3 id="step-title">1. Observe public context</h3></div>
-                <button class="play-button" id="round-play" type="button" aria-label="Play the online round"><span aria-hidden="true">▶</span> Play</button>
-              </div>
-              <div class="round-stage" data-phase="observe">
-                <div class="student-device">
-                  <span class="device-label">Deployed student</span>
-                  <strong>Liquid LFM</strong>
-                  <div class="device-screen" id="student-screen">x<sub>t</sub><br><small>visible fields only</small></div>
-                  <p>No z. No current feedback. No oracle.</p>
+            <figure class="signal-flow" id="signal-flow" aria-labelledby="signal-flow-caption">
+              <figcaption id="signal-flow-caption">Information channels available to the selected method.</figcaption>
+              <div class="signal-columns">
+                <div class="signal-col">
+                  <p class="signal-col-label">At serving time</p>
+                  <ul id="signal-serve" class="signal-list"></ul>
                 </div>
-                <div class="causal-wire" aria-hidden="true"><span></span></div>
-                <div class="world-node">
-                  <span class="world-label">Environment + teacher</span>
-                  <div class="world-content" id="world-screen"><b>sealed</b><small>waiting for an action</small></div>
-                  <p>Privileged state stays on this side.</p>
+                <div class="signal-arrow" aria-hidden="true"><span></span></div>
+                <div class="signal-col">
+                  <p class="signal-col-label">After executed <em>a<sub>t</sub></em></p>
+                  <ul id="signal-post" class="signal-list"></ul>
+                </div>
+                <div class="signal-arrow" aria-hidden="true"><span></span></div>
+                <div class="signal-col">
+                  <p class="signal-col-label">Adaptation</p>
+                  <ul id="signal-adapt" class="signal-list"></ul>
                 </div>
               </div>
-              <ol class="step-tabs" aria-label="Online round steps">
-                <li><button type="button" data-round-step="0" aria-current="step"><span>1</span>Observe</button></li>
-                <li><button type="button" data-round-step="1"><span>2</span>Roll out</button></li>
-                <li><button type="button" data-round-step="2"><span>3</span>Execute</button></li>
-                <li><button type="button" data-round-step="3"><span>4</span>Teach</button></li>
-                <li><button type="button" data-round-step="4"><span>5</span>Update</button></li>
-              </ol>
-              <p class="step-explanation" id="step-explanation">The student receives only notification fields available at serving time.</p>
-            </div>
+              <p class="signal-legend" aria-hidden="true"><span class="state-used">Used</span><span class="state-observed">Observed only</span><span class="state-sealed">Sealed</span><span class="state-absent">Not used</span></p>
+            </figure>
+          </div>
+        </div>
 
-            <pre class="pseudocode"><code><span>for</span> x_t <span>in</span> stream:
+        <p>These are limitations, not impossibility claims. ICL helps when memory contains relevant successes. REINFORCE can learn from negative rewards. The live interaction remains the bottleneck: many generated candidates are still one user experience. Silence is ambiguous, not automatically negative. The missing piece is an interpreter that can combine sparse evidence with context and express uncertainty.</p>
+      </section>
+
+      <section id="sdft">
+        <h2>Online-SDFT: act first, teach second</h2>
+        <p>Online Soft-Distillation Fine-Tuning adds that interpreter as a post-decision teacher. The student must generate its own route without privileged state. Only afterward may the teacher combine context, the chosen action, factual feedback, and other permitted post-decision signals into a soft target.</p>
+
+        <div class="panel round-explorer" id="round-explorer">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">One causal round</p>
+              <h3 id="step-title">1. Observe public context</h3>
+            </div>
+            <button class="ghost-button play-button" id="round-play" type="button" aria-label="Play the online round">Play</button>
+          </div>
+          <div class="round-stage" data-phase="observe">
+            <div class="student-device">
+              <span class="device-label">Deployed student</span>
+              <strong>Liquid LFM</strong>
+              <div class="device-screen" id="student-screen">x<sub>t</sub><br><small>visible fields only</small></div>
+              <p>No hidden state. No current feedback.</p>
+            </div>
+            <div class="causal-wire" aria-hidden="true"><span></span></div>
+            <div class="world-node">
+              <span class="world-label">Environment + teacher</span>
+              <div class="world-content" id="world-screen"><b>sealed</b><small>waiting for an action</small></div>
+              <p>Privileged signals stay on this side.</p>
+            </div>
+          </div>
+          <ol class="step-tabs" aria-label="Online round steps">
+            <li><button type="button" data-round-step="0" aria-current="step"><span>1</span>Observe</button></li>
+            <li><button type="button" data-round-step="1"><span>2</span>Roll out</button></li>
+            <li><button type="button" data-round-step="2"><span>3</span>Execute</button></li>
+            <li><button type="button" data-round-step="3"><span>4</span>Teach</button></li>
+            <li><button type="button" data-round-step="4"><span>5</span>Update</button></li>
+          </ol>
+          <p class="step-explanation" id="step-explanation">The student receives only notification fields available at serving time.</p>
+        </div>
+
+        <pre class="pseudocode"><code><span>for</span> x_t <span>in</span> stream:
     a_t = student.rollout(x_t)              <em># no privileged z</em>
-    score_pre_update(a_t)                   <em># evaluator only; never leaked</em>
+    score_pre_update(a_t)                   <em># evaluator only</em>
     feedback_t = execute_only(a_t)          <em># one factual outcome</em>
     q_t = teacher(x_t, a_t, z_t, feedback_t)
     student.update_small_batch(q_t)         <em># soft target, online</em></code></pre>
 
-            <p>The teacher distribution <em>q<sub>t</sub></em> contains more information than a scalar reward but does not expose the evaluator’s oracle. It may assign most probability to <em>later</em>, some to <em>archive</em>, and little to <em>interrupt</em>, enabling an update even when there is no explicit user reward.</p>
-          </section>
+        <p>Unlike typical batch soft distillation, targets are created after each live action, requests arrive once in order, the student generates every served action, and success is measured while learning—not only after a training phase ends.</p>
+      </section>
 
-          <section class="essay-section" id="baselines">
-            <p class="section-number">05 · What the six learners know</p>
-            <h2>One model, six adaptation mechanisms.</h2>
-            <p>Every method uses the same Liquid LFM action-token probabilities. The comparison changes what can persist across rounds—not what is visible before the current action.</p>
+      <section id="results">
+        <h2>Learning while serving</h2>
+        <p>The reported experiment runs three paired streams of 240 requests across consecutive regimes: weekday → on-call → off-hours. Metrics are online accuracy (was the pre-update action the evaluator’s best route?) and cumulative regret (utility lost versus the best route, summed over the stream). The evaluator may use a hidden utility vector only for scoring; it never enters a prompt, teacher target, reward, or gradient.</p>
 
-            <div class="method-explorer" id="method-explorer">
-              <div class="method-tabs" role="tablist" aria-label="Compared learning methods">
-                <button id="method-tab-base" type="button" role="tab" aria-selected="false" aria-controls="method-panel" tabindex="-1" data-method="base">Base</button>
-                <button id="method-tab-icl" type="button" role="tab" aria-selected="false" aria-controls="method-panel" tabindex="-1" data-method="icl">ICL</button>
-                <button id="method-tab-rag" type="button" role="tab" aria-selected="false" aria-controls="method-panel" tabindex="-1" data-method="rag">RAG</button>
-                <button id="method-tab-reinforce" type="button" role="tab" aria-selected="false" aria-controls="method-panel" tabindex="-1" data-method="reinforce">REINFORCE</button>
-                <button id="method-tab-sft" type="button" role="tab" aria-selected="false" aria-controls="method-panel" tabindex="-1" data-method="sft">Online-SFT</button>
-                <button id="method-tab-sdft" type="button" role="tab" aria-selected="true" aria-controls="method-panel" tabindex="0" data-method="sdft">Online-SDFT</button>
-              </div>
-              <div class="method-panel" id="method-panel" role="tabpanel" aria-labelledby="method-tab-sdft" aria-live="polite">
-                <div class="method-summary">
-                  <p class="lab-eyebrow" id="method-family">Weights adapt online</p>
-                  <h3 id="method-name">Online-SDFT</h3>
-                  <p id="method-description">Distills the teacher’s complete soft action distribution into a rank-4 LoRA adapter after each executed action.</p>
-                  <dl class="method-facts">
-                    <div><dt>Current-round input</dt><dd id="method-input">Visible context only</dd></div>
-                    <div><dt>Past signal</dt><dd id="method-signal">Post-decision teacher distribution</dd></div>
-                    <div><dt>What changes</dt><dd id="method-change">172,032 LoRA parameters</dd></div>
-                    <div><dt>Online accuracy</dt><dd><strong id="method-score">64.72%</strong><span class="score-track"><i id="method-score-bar" style="width:64.72%"></i></span></dd></div>
-                    <div><dt>Cumulative regret ↓</dt><dd><strong id="method-regret" class="regret-value">36.24</strong><span class="score-track regret-track"><i id="method-regret-bar" style="width:31.34%"></i></span></dd></div>
-                  </dl>
-                </div>
-                <figure class="signal-flow" id="signal-flow" aria-labelledby="signal-flow-caption">
-                  <figcaption id="signal-flow-caption">Information channels available to the selected method. Sealed channels never enter the student prompt, replay, teacher target, reward, or gradient.</figcaption>
-                  <div class="signal-columns">
-                    <div class="signal-col">
-                      <p class="signal-col-label">At serving time</p>
-                      <ul id="signal-serve" class="signal-list"></ul>
-                    </div>
-                    <div class="signal-arrow" aria-hidden="true"><span></span></div>
-                    <div class="signal-col">
-                      <p class="signal-col-label">After executed <em>a<sub>t</sub></em></p>
-                      <ul id="signal-post" class="signal-list"></ul>
-                    </div>
-                    <div class="signal-arrow" aria-hidden="true"><span></span></div>
-                    <div class="signal-col">
-                      <p class="signal-col-label">Adaptation</p>
-                      <ul id="signal-adapt" class="signal-list"></ul>
-                    </div>
-                  </div>
-                  <p class="signal-legend" aria-hidden="true"><span class="state-used">Used</span><span class="state-observed">Observed only</span><span class="state-sealed">Sealed</span><span class="state-absent">Not used</span></p>
-                </figure>
-              </div>
-            </div>
-
-            <div class="case-study">
-              <div>
-                <p class="case-label">A real trace · seed 0 · decision 148</p>
-                <h3>Example selection changes the LFM decision.</h3>
-                <p>For the same low-urgency social notification, ICL’s last 12 examples contain seven “interrupt” labels. The frozen LFM outputs A with 51.27%. RAG retrieves similar social, on-call contexts instead and outputs B with 81.36%—the evaluator’s preferred route.</p>
-              </div>
-              <div class="trace-compare">
-                <div><span>ICL · recent 12</span><b class="bad-answer">A · INTERRUPT</b><small>P(A) = 0.5127</small></div>
-                <div><span>RAG · nearest 12</span><b class="good-answer">B · LATER</b><small>P(B) = 0.8136</small></div>
-              </div>
-              <a href="https://github.com/lin826/Online-SFT-Demo/blob/main/docs/methods.md#worked-prompts-and-actual-lfm-responses">Read both complete prompts and responses ↗</a>
-            </div>
-          </section>
-
-          <section class="essay-section" id="results">
-            <p class="section-number">06 · Experiment</p>
-            <h2>Prequential evaluation scores the policy during adaptation.</h2>
-            <p>Each seed is one 240-event stream: 80 weekday decisions, then 80 on-call decisions, then 80 off-hours decisions. All methods receive paired streams and start fresh. Each action is scored before its feedback or update.</p>
-
-            <div class="regime-ribbon" aria-label="Three sequential stream regimes">
-              <div><span>1–80</span><strong>Weekday</strong><small>routine work hours</small></div>
-              <div><span>81–160</span><strong>On-call</strong><small>alert sensitivity shifts</small></div>
-              <div><span>161–240</span><strong>Off-hours</strong><small>interruption cost rises</small></div>
-            </div>
-
-            <div class="results-bleed">
-              <div class="result-intro">
-                <div><span class="big-result">64.72%</span><small>Online-SDFT accuracy</small></div>
-                <div><span class="big-result">36.24</span><small>cumulative regret ↓</small></div>
-                <p>Mean across 3 paired random seeds. Intervals are 95% confidence intervals; the study is deliberately small and preliminary.</p>
-              </div>
-              <div class="result-table-wrap">
-                <table>
-                  <caption class="sr-only">Published online results for all six methods</caption>
-                  <thead><tr><th scope="col">Method</th><th scope="col">Online accuracy</th><th scope="col">Cumulative regret ↓</th></tr></thead>
-                  <tbody>
-                    <tr><th scope="row">Base</th><td>37.08% <small>± 3.30</small></td><td>81.50 <small>± 2.24</small></td></tr>
-                    <tr><th scope="row">ICL</th><td>37.50% <small>± 1.25</small></td><td>81.10 <small>± 1.37</small></td></tr>
-                    <tr><th scope="row">RAG</th><td>38.75% <small>± 0.47</small></td><td>79.94 <small>± 7.38</small></td></tr>
-                    <tr><th scope="row">REINFORCE</th><td>32.08% <small>± 1.70</small></td><td>115.65 <small>± 16.88</small></td></tr>
-                    <tr><th scope="row">Online-SFT</th><td>41.94% <small>± 2.72</small></td><td>97.65 <small>± 13.23</small></td></tr>
-                    <tr class="best-row"><th scope="row">Online-SDFT</th><td>64.72% <small>± 3.14</small></td><td>36.24 <small>± 1.66</small></td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <figure class="figure-bleed plot-figure">
-              <img src="figures/bandit_learning_curves.png" alt="Two learning curves over 240 decisions. Online-SDFT develops the highest running online accuracy and the lowest cumulative regret across the stream.">
-              <figcaption><b>Figure 2.</b> Running online accuracy and cumulative regret. Vertical markers indicate regime changes in the non-stationary stream.</figcaption>
-            </figure>
-
-            <h3 class="subhead">Why does reward-only REINFORCE underperform?</h3>
-            <p>REINFORCE receives one scalar from one rollout. In this simulator, archival silence often produces zero reward, while an intrusive push can produce negative reward. The policy increasingly selects <em>archive</em>, a low-variance action that reduces effective exploration and accumulates evaluator regret. Online-SDFT can update from the teacher distribution even when there is no explicit user response.</p>
-
-            <figure class="figure-bleed process-gif">
-              <img src="figures/online_sdft_process.gif" alt="Animation of the Online-SDFT loop from context to student action, factual outcome, teacher distribution, and small online update.">
-              <figcaption><b>Figure 3.</b> One complete Online-SDFT interaction. The student never receives the privileged state used by the post-decision teacher.</figcaption>
-            </figure>
-          </section>
-
-          <section class="essay-section" id="limits">
-            <p class="section-number">07 · Interpretation</p>
-            <h2>Scope and limitations.</h2>
-            <div class="claim-grid">
-              <div><span>Supported</span><p>On these three paired simulator streams, Online-SDFT improves the quality of the decisions made during adaptation.</p></div>
-              <div><span>Supported</span><p>The implementation preserves the causal order: student rollout, one factual outcome, teacher, then online update.</p></div>
-              <div class="caution"><span>Not yet established</span><p>Three seeds are not enough for a broad claim about all users, devices, or drifting environments.</p></div>
-              <div class="caution"><span>Not yet established</span><p>The simulator’s utility weights are a declared product model, not a universal measure of notification quality.</p></div>
-            </div>
-            <p>Further validation requires more <em>paired online streams</em>, ablations of the teacher and reward design, and a carefully instrumented real interaction study.</p>
-          </section>
-
-          <section class="essay-section" id="reproduce">
-            <p class="section-number">08 · Reproduce it</p>
-            <h2>Audit the information boundaries and reproduce every decision.</h2>
-            <p>The notebook is self-contained: simulator, Liquid LFM policy, six learners, animation, prompts, plots, and audit checks live in one file. A Colab T4 GPU is the shortest path to a full rerun.</p>
-            <div class="reproduce-card">
-              <div>
-                <p class="lab-eyebrow">GPU-ready notebook</p>
-                <h3>Run the entire online stream in Colab</h3>
-                <p>No repository files are read at runtime. The notebook installs the environment and downloads LiquidAI/LFM2.5-230M directly.</p>
-              </div>
-              <a class="primary-link" href="https://colab.research.google.com/github/lin826/Online-SFT-Demo/blob/main/online_sdft_bandit_demo.ipynb">Open in Colab <span aria-hidden="true">↗</span></a>
-            </div>
-            <div class="reading-links">
-              <a href="https://github.com/lin826/Online-SFT-Demo/blob/main/docs/problem-setting.md"><span>01</span><b>Problem setting</b><small>Causal feedback and information boundaries</small></a>
-              <a href="https://github.com/lin826/Online-SFT-Demo/blob/main/docs/methods.md"><span>02</span><b>Method details</b><small>Algorithms, prompts, and responses</small></a>
-              <a href="https://github.com/lin826/Online-SFT-Demo/blob/main/docs/evaluation.md"><span>03</span><b>Regret audit</b><small>Utilities, weights, and exact pseudocode</small></a>
-              <a href="https://github.com/lin826/Online-SFT-Demo/blob/main/docs/results.md"><span>04</span><b>Results</b><small>Protocol, artifacts, and commands</small></a>
-            </div>
-          </section>
-
-          <footer class="article-footer">
-            <p><strong>Online-SDFT for Notification Routing</strong> is an open research demo built around a real LiquidAI LFM2.5-230M student.</p>
-            <div><a href="https://github.com/lin826/Online-SFT-Demo">GitHub repository</a><a href="https://github.com/lin826/Online-SFT-Demo/blob/main/LICENSE">License</a><a href="#top">Back to top ↑</a></div>
-          </footer>
+        <div class="results-block">
+          <div class="result-stats">
+            <div><span class="big-result">64.72%</span><small>Online-SDFT accuracy</small></div>
+            <div><span class="big-result">36.24</span><small>cumulative regret ↓</small></div>
+          </div>
+          <div class="result-table-wrap">
+            <table>
+              <caption class="sr-only">Published online results for all six methods</caption>
+              <thead><tr><th scope="col">Method</th><th scope="col">Online accuracy</th><th scope="col">Cumulative regret ↓</th></tr></thead>
+              <tbody>
+                <tr><th scope="row">Base</th><td>37.08% <small>± 3.30</small></td><td>81.50 <small>± 2.24</small></td></tr>
+                <tr><th scope="row">ICL</th><td>37.50% <small>± 1.25</small></td><td>81.10 <small>± 1.37</small></td></tr>
+                <tr><th scope="row">RAG</th><td>38.75% <small>± 0.47</small></td><td>79.94 <small>± 7.38</small></td></tr>
+                <tr><th scope="row">REINFORCE</th><td>32.08% <small>± 1.70</small></td><td>115.65 <small>± 16.88</small></td></tr>
+                <tr><th scope="row">Online-SFT</th><td>41.94% <small>± 2.72</small></td><td>97.65 <small>± 13.23</small></td></tr>
+                <tr class="best-row"><th scope="row">Online-SDFT</th><td>64.72% <small>± 3.14</small></td><td>36.24 <small>± 1.66</small></td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+        <p class="fine-print">Mean over three paired seeds with 95% confidence intervals. A preliminary simulator study, not a production-scale claim.</p>
+
+        <figure>
+          <img src="figures/bandit_learning_curves.png" alt="Learning curves over 240 decisions. Online-SDFT reaches the highest running online accuracy and the lowest cumulative regret.">
+          <figcaption><b>Figure 1.</b> Running online accuracy and cumulative regret. Dashed markers indicate regime changes in the non-stationary stream.</figcaption>
+        </figure>
+
+        <p>REINFORCE receives one scalar from one rollout. In this simulator, archival silence often produces zero reward, and the policy increasingly archives—a low-variance choice that can accumulate evaluator regret. Online-SDFT can still update from a teacher distribution when there is little explicit user response. Relative to Online-SFT, keeping the complete soft target adds 22.78 accuracy points and removes 61.41 regret units on average.</p>
+
+        <figure>
+          <img src="figures/online_sdft_process.gif" alt="Animation of the Online-SDFT loop from context to student action, factual outcome, teacher distribution, and small online update.">
+          <figcaption><b>Figure 2.</b> One Online-SDFT interaction. The student never receives the privileged state used by the post-decision teacher.</figcaption>
+        </figure>
+      </section>
+
+      <section id="limits">
+        <h2>What this shows—and what it does not</h2>
+        <div class="claim-grid">
+          <div>
+            <span>Supported</span>
+            <p>Under a strict causal interaction loop, a soft post-decision teacher can train a small policy more effectively than hard teacher samples, short memory, or retrieval on these streams.</p>
+          </div>
+          <div>
+            <span>Supported</span>
+            <p>The implementation preserves the order: student rollout, one factual outcome, teacher, then online update for future requests.</p>
+          </div>
+          <div class="caution">
+            <span>Not established</span>
+            <p>Three seeds do not support a broad claim about all users, devices, or drifting environments.</p>
+          </div>
+          <div class="caution">
+            <span>Not established</span>
+            <p>The simulator’s utility weights are a declared product model, not a universal measure of notification quality.</p>
+          </div>
+        </div>
+        <blockquote>
+          <p>Act without privileged information. Observe only what the action caused. Learn from the teacher, not an oracle label. Let the update help only future requests.</p>
+        </blockquote>
+        <p>That is the difference between replaying a dataset and learning online. Continual personalization needs the second loop whenever preferences and contexts keep changing.</p>
+
+        <div class="end-links">
+          <a href="https://colab.research.google.com/github/lin826/Online-SFT-Demo/blob/main/online_sdft_bandit_demo.ipynb">Run the notebook in Colab</a>
+          <a href="https://github.com/lin826/Online-SFT-Demo/blob/main/docs/problem-setting.md">Problem setting</a>
+          <a href="https://github.com/lin826/Online-SFT-Demo/blob/main/docs/methods.md">Methods and prompts</a>
+          <a href="https://github.com/lin826/Online-SFT-Demo/blob/main/docs/evaluation.md">Regret calculation</a>
+          <a href="https://github.com/lin826/Online-SFT-Demo">GitHub repository</a>
+        </div>
+      </section>
+
+      <footer class="article-footer">
+        <p>Open research demo around LiquidAI/LFM2.5-230M for notification routing under action-dependent feedback.</p>
+      </footer>
     </article>
   </main>
 </body>
