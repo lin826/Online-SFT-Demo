@@ -355,7 +355,7 @@ The hidden utility vector $u_t$ is available to the evaluator because this is a 
 
 ![Online accuracy and cumulative regret for all six methods](figures/bandit_accuracy.png)
 
-*Higher is better on the left; lower is better on the right. Error bars are 95% confidence intervals over paired streams.*
+*Mean over three paired streams; error bars are 95% confidence intervals. Every decision is scored before the model learns from it.*
 
 Online-SDFT reaches **64.72% ± 3.14** online accuracy with **36.24 ± 1.66**
 cumulative regret. RAG, the strongest frozen baseline by accuracy, reaches
@@ -375,7 +375,7 @@ a preliminary demonstration, not a production-scale statistical claim.
 
 ![Cumulative online accuracy and regret over the 240-request stream](figures/bandit_learning_curves.png)
 
-*The dashed lines mark the shifts from weekday to on-call and from on-call to off-hours.*
+*Shaded bands mark the three preference regimes. Each point is the running average over the decisions made so far, so early cold-start mistakes stay in the record.*
 
 The blue SDFT curve rises as interactions accumulate while its regret grows much
 more slowly. Its phase accuracy moves from **52.50%** during weekday requests to

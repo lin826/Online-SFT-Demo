@@ -410,7 +410,7 @@ ordering.</p>
 \(\mathcal{R}(T)\) over all 240 decisions.</p>
 <p>The hidden utility vector \(u_t\) is available to the evaluator because this is a simulator. It is never used as a target or update signal. The <a href="https://github.com/lin826/Online-SFT-Demo/blob/main/docs/evaluation.md">evaluation guide</a> gives the exact calculation and explains the utility weights.</p>
 <h3 id="result-soft-online-targets-learn-faster">Result: soft online targets learn faster</h3>
-<figure class="figure figure-wide"><img alt="Online accuracy and cumulative regret for all six methods" src="figures/bandit_accuracy.png" /><figcaption>Higher is better on the left; lower is better on the right. Error bars are 95% confidence intervals over paired streams.</figcaption></figure>
+<figure class="figure figure-wide"><img alt="Online accuracy and cumulative regret for all six methods" src="figures/bandit_accuracy.png" /><figcaption>Mean over three paired streams; error bars are 95% confidence intervals. Every decision is scored before the model learns from it.</figcaption></figure>
 <p>Online-SDFT reaches <strong>64.72% ± 3.14</strong> online accuracy with <strong>36.24 ± 1.66</strong>
 cumulative regret. RAG, the strongest frozen baseline by accuracy, reaches
 <strong>38.75% ± 0.47</strong> accuracy and <strong>79.94 ± 7.38</strong> regret.</p>
@@ -423,7 +423,7 @@ evaluator&rsquo;s fuller utility. REINFORCE cannot use that hidden utility vecto
 Online-SDFT wins both metrics in all three paired streams. Three seeds make this
 a preliminary demonstration, not a production-scale statistical claim.</p>
 <h3 id="result-the-advantage-grows-during-the-stream">Result: the advantage grows during the stream</h3>
-<figure class="figure figure-wide"><img alt="Cumulative online accuracy and regret over the 240-request stream" src="figures/bandit_learning_curves.png" /><figcaption>The dashed lines mark the shifts from weekday to on-call and from on-call to off-hours.</figcaption></figure>
+<figure class="figure figure-wide"><img alt="Cumulative online accuracy and regret over the 240-request stream" src="figures/bandit_learning_curves.png" /><figcaption>Shaded bands mark the three preference regimes. Each point is the running average over the decisions made so far, so early cold-start mistakes stay in the record.</figcaption></figure>
 <p>The blue SDFT curve rises as interactions accumulate while its regret grows much
 more slowly. Its phase accuracy moves from <strong>52.50%</strong> during weekday requests to
 <strong>63.75%</strong> on call and <strong>77.92%</strong> off hours. These are not held-out test

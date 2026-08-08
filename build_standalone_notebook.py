@@ -67,35 +67,47 @@ import matplotlib.pyplot as plt
 
 GIF_WIDTH, GIF_HEIGHT = 1200, 675
 PALETTE = {
-    "bg": "#F8FAFC",
-    "navy": "#14233B",
-    "blue": "#4F6BED",
-    "teal": "#0D9488",
-    "coral": "#E76F51",
-    "slate": "#526277",
-    "line": "#D7E0EA",
-    "pale_blue": "#EEF2FF",
-    "pale_teal": "#E7F6F3",
-    "pale_coral": "#FCEEEA",
+    "bg": "#FFFFFF",
+    "navy": "#1F2328",
+    "blue": "#1F5FD8",
+    "teal": "#0F6F63",
+    "coral": "#B4573F",
+    "slate": "#6B7280",
+    "line": "#E3E5E9",
+    "pale_blue": "#EEF3FD",
+    "pale_teal": "#EAF3F1",
+    "pale_coral": "#FAEFEB",
     "white": "#FFFFFF",
 }
 
 
 def _font(size, bold=False):
     weight = "bold" if bold else "normal"
+    # Prefer a grotesque that matches the article; DejaVu is the portable
+    # fallback that always ships with matplotlib (e.g. on Colab).
     path = font_manager.findfont(
-        font_manager.FontProperties(family="DejaVu Sans", weight=weight)
+        font_manager.FontProperties(
+            family=[
+                "Helvetica Neue",
+                "Helvetica",
+                "Arial",
+                "Liberation Sans",
+                "DejaVu Sans",
+            ],
+            weight=weight,
+        ),
+        fallback_to_default=True,
     )
     return ImageFont.truetype(path, size=size)
 
 
 FONTS = {
-    "title": _font(34, True),
-    "heading": _font(17, True),
-    "body": _font(16),
-    "body_bold": _font(16, True),
+    "title": _font(27, True),
+    "heading": _font(15, True),
+    "body": _font(15),
+    "body_bold": _font(15, True),
     "small": _font(13),
-    "status": _font(20, True),
+    "status": _font(17),
 }
 
 
@@ -126,18 +138,26 @@ def _arrow(draw, start, end, fill, width=4):
     )
 
 
-def _pill(draw, box, text, fill, outline, text_fill, font=None):
+def _pill(draw, box, text, fill, outline, text_fill, font=None, width=1):
     font = font or FONTS["body_bold"]
-    draw.rounded_rectangle(box, radius=12, fill=fill, outline=outline, width=2)
+    draw.rounded_rectangle(box, radius=10, fill=fill, outline=outline, width=width)
     _center(draw, ((box[0] + box[2]) / 2, (box[1] + box[3]) / 2), text, font, text_fill)
 
 
 def _card(draw, box, title, intensity, active=False):
-    outline = PALETTE["teal"] if active else _blend(PALETTE["navy"], PALETTE["bg"], intensity)
-    fill = _blend(PALETTE["white"], PALETTE["bg"], max(0.55, intensity))
-    draw.rounded_rectangle(box, radius=18, fill=fill, outline=outline, width=4 if active else 2)
-    _center(draw, ((box[0] + box[2]) / 2, box[1] + 34), title,
-            FONTS["heading"], _blend(PALETTE["navy"], PALETTE["bg"], intensity))
+    outline = (
+        PALETTE["blue"] if active
+        else _blend(PALETTE["line"], PALETTE["bg"], max(0.45, intensity))
+    )
+    fill = PALETTE["white"] if active else _blend("#FBFCFD", PALETTE["bg"], intensity)
+    draw.rounded_rectangle(box, radius=14, fill=fill, outline=outline,
+                           width=2 if active else 1)
+    label_color = (
+        PALETTE["blue"] if active
+        else _blend(PALETTE["slate"], PALETTE["bg"], intensity)
+    )
+    _center(draw, ((box[0] + box[2]) / 2, box[1] + 32), title,
+            FONTS["heading"], label_color)
 
 
 def _draw_context(draw, box, intensity):
@@ -171,7 +191,8 @@ def _draw_student(draw, box, intensity):
         _pill(draw, (x1 + 20, y, x2 - 20, y + 48), label,
               _blend(fill, PALETTE["bg"], intensity),
               _blend(outline, PALETTE["bg"], intensity),
-              _blend(PALETTE["navy"], PALETTE["bg"], intensity))
+              _blend(PALETTE["navy"], PALETTE["bg"], intensity),
+              width=2 if selected else 1)
         draw.rectangle((x1 + 30, y + 55, x1 + 30 + 145 * probability, y + 61),
                        fill=_blend(PALETTE["blue"], PALETTE["bg"], intensity))
         draw.rectangle((x1 + 30 + 145 * probability, y + 55, x2 - 30, y + 61),
@@ -185,10 +206,10 @@ def _draw_commit(draw, box, intensity):
     _pill(draw, (x1 + 35, y1 + 80, x2 - 35, y1 + 132), "LATER",
           _blend(PALETTE["pale_teal"], PALETTE["bg"], intensity),
           _blend(PALETTE["teal"], PALETTE["bg"], intensity),
-          _blend(PALETTE["teal"], PALETTE["bg"], intensity))
+          _blend(PALETTE["teal"], PALETTE["bg"], intensity), width=2)
     _center(draw, ((x1 + x2) / 2, y1 + 160), "action is frozen",
             FONTS["small"], _blend(PALETTE["slate"], PALETTE["bg"], intensity))
-    for index, label in enumerate(("INTERRUPT  LOCKED", "ARCHIVE    LOCKED")):
+    for index, label in enumerate(("INTERRUPT · locked", "ARCHIVE · locked")):
         y = y1 + 190 + index * 58
         _pill(draw, (x1 + 22, y, x2 - 22, y + 40), label,
               _blend(PALETTE["pale_coral"], PALETTE["bg"], intensity),
@@ -244,14 +265,10 @@ def _draw_frame(progress):
     image = PILImage.new("RGB", (GIF_WIDTH, GIF_HEIGHT), PALETTE["bg"])
     draw = ImageDraw.Draw(image)
 
-    for x in range(0, GIF_WIDTH, 40):
-        draw.line((x, 0, x, GIF_HEIGHT), fill="#F0F3F7", width=1)
-    for y in range(0, GIF_HEIGHT, 40):
-        draw.line((0, y, GIF_WIDTH, y), fill="#F0F3F7", width=1)
-
-    _center(draw, (GIF_WIDTH / 2, 48), "ONLINE SDFT · ONE CAUSAL ROUND",
+    _center(draw, (GIF_WIDTH / 2, 46), "One causal round of Online-SDFT",
             FONTS["title"], PALETTE["navy"])
-    _center(draw, (GIF_WIDTH / 2, 87), "predict → commit → observe one world → learn for the next round",
+    _center(draw, (GIF_WIDTH / 2, 84),
+            "predict · commit · observe one world · learn for the next round",
             FONTS["body"], PALETTE["slate"])
 
     left, gap, card_width = 24, 18, 216
@@ -265,9 +282,9 @@ def _draw_frame(progress):
 
     current = min(4, int(progress))
     for index, (cx, cy) in enumerate(centers):
-        fill = PALETTE["teal"] if index <= current else PALETTE["line"]
-        draw.ellipse((cx - 11, cy - 11, cx + 11, cy + 11), fill=fill,
-                     outline=PALETTE["white"], width=3)
+        fill = PALETTE["blue"] if index <= current else PALETTE["line"]
+        draw.ellipse((cx - 8, cy - 8, cx + 8, cy + 8), fill=fill,
+                     outline=PALETTE["white"], width=2)
 
     if progress < 4:
         start = centers[int(progress)][0]
@@ -276,25 +293,25 @@ def _draw_frame(progress):
         dot_x = start + (finish - start) * fraction
     else:
         dot_x = centers[-1][0]
-    draw.ellipse((dot_x - 7, 121, dot_x + 7, 135), fill=PALETTE["blue"])
+    draw.ellipse((dot_x - 5, 123, dot_x + 5, 133), fill=PALETTE["navy"])
 
-    titles = ("1 CONTEXT", "2 LIQUID LFM", "3 COMMIT + SCORE",
-              "4 FEEDBACK", "5 TEACH + UPDATE")
+    titles = ("1 · Context", "2 · Liquid LFM", "3 · Commit + score",
+              "4 · Feedback", "5 · Teach + update")
     renderers = (_draw_context, _draw_student, _draw_commit, _draw_feedback, _draw_teacher)
     for index, box in enumerate(cards):
         if index < current:
-            intensity = 0.78
+            intensity = 0.82
         elif index == current:
             intensity = 1.0
         else:
-            intensity = 0.32
+            intensity = 0.48
         _card(draw, box, titles[index], intensity, active=index == current)
         renderers[index](draw, box, intensity)
 
     if current == 4:
-        _center(draw, (GIF_WIDTH / 2, 551), "Updated policy faces the next context",
-                FONTS["small"], PALETTE["teal"])
-        _arrow(draw, (cards[4][2] - 15, 574), (cards[0][0] + 15, 574), PALETTE["teal"], 4)
+        _center(draw, (GIF_WIDTH / 2, 551), "the updated policy faces the next context",
+                FONTS["small"], PALETTE["blue"])
+        _arrow(draw, (cards[4][2] - 15, 574), (cards[0][0] + 15, 574), PALETTE["blue"], 2)
 
     status = (
         "Context x_t arrives; no current feedback exists.",
@@ -303,9 +320,8 @@ def _draw_frame(progress):
         "Only the selected action produces factual feedback.",
         "The teacher's soft target updates a tiny batch for t+1.",
     )[current]
-    draw.rounded_rectangle((90, 598, 1110, 650), radius=18,
-                           fill=PALETTE["navy"], outline=PALETTE["navy"])
-    _center(draw, (600, 624), status, FONTS["status"], PALETTE["white"])
+    draw.line((90, 604, 1110, 604), fill=PALETTE["line"], width=1)
+    _center(draw, (600, 634), status, FONTS["status"], PALETTE["navy"])
     return image
 
 
