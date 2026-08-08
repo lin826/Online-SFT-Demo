@@ -190,7 +190,7 @@ the executed route in the teacher; it does not enter regret.
 | `docs/evaluation.md` | Utility rationale and exact regret calculation |
 | `docs/results.md` | Protocol, results, artifacts, reproduction |
 | `BLOG.md` | Accessible long-form blog draft |
-| `website/` | Dependency-free interactive research article |
+| `website/` | Static site generated from `BLOG.md` by `build_site.py` |
 | `.github/workflows/pages.yml` | GitHub Pages assembly and deployment |
 | `tests/` | Causal, method, result, and notebook invariants |
 
@@ -222,28 +222,41 @@ the package.
 
 ## Website
 
-The live GitHub Pages site is a dependency-free static research article:
+The live GitHub Pages site is generated from `BLOG.md`; the Markdown file is
+the single source of truth for the narrative:
 
-- `website/index.html`: professional long-form narrative;
-- `website/styles.css`: editorial responsive layout;
-- `website/app.js`: reading progress, causal decision example, animated
-  Online-SDFT round, and six-method comparison;
-- `website/assets/og.png`: social-preview card.
+- `website/build_site.py`: renders `BLOG.md` into `index.html` (protects math
+  from the Markdown converter, wraps figures with captions, promotes Mermaid
+  blocks, rewrites repository links, and builds the hero and contents list);
+- `website/styles.css`: academic project-page layout — narrow reading column
+  with figures that extend past it;
+- `website/assets/og.png`: social-preview card;
+- `website/index.html`: build output, committed so the site can be previewed
+  without running the builder.
 
-The causal decision widget in `website/app.js` is explicitly a simplified,
-deterministic pedagogical example. It is **not** the published benchmark and
-must not be used to derive reported results.
+Math uses `$...$` and `$$...$$` in `BLOG.md` so it renders both on GitHub and,
+via KaTeX, on the site. Mermaid and KaTeX load from CDN; nothing else is
+bundled. There are no interactive modules right now — the plan is to add them
+back one section at a time on top of this render.
 
 The user prefers this article style over a product landing page. Preserve:
 
-- narrow reading column and editorial hierarchy;
-- professional diagrams and restrained ivory/ink/teal/coral palette;
-- interactive modules that reveal feedback only after the action;
-- keyboard accessibility, reduced-motion handling, semantic headings, and alt
-  text;
+- narrow reading column, wide figures, restrained ink/teal palette;
+- the story order: online continual learning first, bandit formulation second;
+- semantic headings, alt text, and reduced-motion handling;
 - precise, professional copy without playful metaphors.
 
-The workflow copies `website/` plus these three existing figures into `_site`:
+Rebuild after editing `BLOG.md` or the builder:
+
+```bash
+python3 -m pip install markdown
+python3 website/build_site.py
+```
+
+The workflow runs the same builder and copies these existing figures into
+`_site`:
+
+- `figures/blog_teaser.png`
 
 - `figures/online_sdft_process.gif`
 - `figures/bandit_accuracy.png`
@@ -257,7 +270,7 @@ Verify the new run and then verify the live URL returns the new content.
 Quick checks:
 
 ```bash
-node --check website/app.js
+python3 website/build_site.py
 git diff --check
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q
 ```
@@ -315,7 +328,7 @@ part of the tracked project. Do not stage them accidentally.
 7. `online_sdft/methods.py`
 8. `online_sdft/experiment.py`
 9. `tests/`
-10. `website/index.html` and `website/app.js`
+10. `BLOG.md` and `website/build_site.py`
 
 When changing behavior, update the package, notebook builder/notebook, docs,
 tests, and website only where the same claim or implementation is duplicated.
