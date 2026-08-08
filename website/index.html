@@ -257,13 +257,34 @@
                   <p class="lab-eyebrow" id="method-family">Weights adapt online</p>
                   <h3 id="method-name">Online-SDFT</h3>
                   <p id="method-description">Distills the teacher’s complete soft action distribution into a rank-4 LoRA adapter after each executed action.</p>
+                  <dl class="method-facts">
+                    <div><dt>Current-round input</dt><dd id="method-input">Visible context only</dd></div>
+                    <div><dt>Past signal</dt><dd id="method-signal">Post-decision teacher distribution</dd></div>
+                    <div><dt>What changes</dt><dd id="method-change">172,032 LoRA parameters</dd></div>
+                    <div><dt>Online accuracy</dt><dd><strong id="method-score">64.72%</strong><span class="score-track"><i id="method-score-bar" style="width:64.72%"></i></span></dd></div>
+                    <div><dt>Cumulative regret ↓</dt><dd><strong id="method-regret" class="regret-value">36.24</strong><span class="score-track regret-track"><i id="method-regret-bar" style="width:31.34%"></i></span></dd></div>
+                  </dl>
                 </div>
-                <dl class="method-facts">
-                  <div><dt>Current-round input</dt><dd id="method-input">Visible context only</dd></div>
-                  <div><dt>Past signal</dt><dd id="method-signal">Post-decision teacher distribution</dd></div>
-                  <div><dt>What changes</dt><dd id="method-change">172,032 LoRA parameters</dd></div>
-                  <div><dt>Online accuracy</dt><dd><strong id="method-score">64.72%</strong><span class="score-track"><i id="method-score-bar" style="width:64.72%"></i></span></dd></div>
-                </dl>
+                <figure class="signal-flow" id="signal-flow" aria-labelledby="signal-flow-caption">
+                  <figcaption id="signal-flow-caption">Information channels available to the selected method. Sealed channels never enter the student prompt, replay, teacher target, reward, or gradient.</figcaption>
+                  <div class="signal-columns">
+                    <div class="signal-col">
+                      <p class="signal-col-label">At serving time</p>
+                      <ul id="signal-serve" class="signal-list"></ul>
+                    </div>
+                    <div class="signal-arrow" aria-hidden="true"><span></span></div>
+                    <div class="signal-col">
+                      <p class="signal-col-label">After executed <em>a<sub>t</sub></em></p>
+                      <ul id="signal-post" class="signal-list"></ul>
+                    </div>
+                    <div class="signal-arrow" aria-hidden="true"><span></span></div>
+                    <div class="signal-col">
+                      <p class="signal-col-label">Adaptation</p>
+                      <ul id="signal-adapt" class="signal-list"></ul>
+                    </div>
+                  </div>
+                  <p class="signal-legend" aria-hidden="true"><span class="state-used">Used</span><span class="state-observed">Observed only</span><span class="state-sealed">Sealed</span><span class="state-absent">Not used</span></p>
+                </figure>
               </div>
             </div>
 

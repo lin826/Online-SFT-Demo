@@ -247,39 +247,169 @@ roundPlay.addEventListener('click', toggleRoundPlayback);
 renderRoundStep(0);
 
 // Interactive comparison of the six methods.
+const MAX_REGRET = 115.65;
 const methods = {
   base: {
-    name: 'Base', family: 'Frozen weights · no memory', score: 37.08,
+    name: 'Base', family: 'Frozen weights · no memory', score: 37.08, regret: 81.50,
     description: 'Serves every notification with the pretrained Liquid LFM and never adapts to the user or stream.',
     input: 'Visible context only', signal: 'None', change: 'Nothing',
+    flow: {
+      serve: [
+        { label: 'Visible context x', state: 'used' },
+        { label: 'Hidden state z', state: 'sealed' },
+        { label: 'Evaluator utilities', state: 'sealed' },
+        { label: 'Prompt memory', state: 'absent' },
+      ],
+      post: [
+        { label: 'Factual route outcome', state: 'observed' },
+        { label: 'Scalar reward', state: 'absent' },
+        { label: 'Teacher hard sample', state: 'absent' },
+        { label: 'Teacher soft distribution', state: 'absent' },
+      ],
+      adapt: [
+        { label: 'No parameter update', state: 'absent' },
+        { label: 'No cross-round memory', state: 'absent' },
+      ],
+    },
   },
   icl: {
-    name: 'ICL', family: 'Frozen weights · recent memory', score: 37.50,
+    name: 'ICL', family: 'Frozen weights · recent memory', score: 37.50, regret: 81.10,
     description: 'Adds the 12 most recent legal teacher-labeled examples to the prompt. The LFM weights remain frozen.',
     input: 'Context + 12 recent examples', signal: 'Past sampled teacher routes', change: 'Prompt only',
+    flow: {
+      serve: [
+        { label: 'Visible context x', state: 'used' },
+        { label: 'Hidden state z', state: 'sealed' },
+        { label: 'Evaluator utilities', state: 'sealed' },
+        { label: 'Last 12 teacher examples', state: 'used' },
+      ],
+      post: [
+        { label: 'Factual route outcome', state: 'observed' },
+        { label: 'Scalar reward', state: 'absent' },
+        { label: 'Teacher hard sample', state: 'used' },
+        { label: 'Teacher soft distribution', state: 'absent' },
+      ],
+      adapt: [
+        { label: 'Weights stay frozen', state: 'absent' },
+        { label: 'Append example after round', state: 'used' },
+      ],
+    },
   },
   rag: {
-    name: 'RAG', family: 'Frozen weights · retrieved memory', score: 38.75,
+    name: 'RAG', family: 'Frozen weights · retrieved memory', score: 38.75, regret: 79.94,
     description: 'Retrieves 12 similar past contexts with a mixed-feature distance and places the strongest match next to the current query.',
     input: 'Context + 12 nearest examples', signal: 'Past sampled teacher routes', change: 'Prompt only',
+    flow: {
+      serve: [
+        { label: 'Visible context x', state: 'used' },
+        { label: 'Hidden state z', state: 'sealed' },
+        { label: 'Evaluator utilities', state: 'sealed' },
+        { label: '12 nearest past contexts', state: 'used' },
+      ],
+      post: [
+        { label: 'Factual route outcome', state: 'observed' },
+        { label: 'Scalar reward', state: 'absent' },
+        { label: 'Teacher hard sample', state: 'used' },
+        { label: 'Teacher soft distribution', state: 'absent' },
+      ],
+      adapt: [
+        { label: 'Weights stay frozen', state: 'absent' },
+        { label: 'Index record after round', state: 'used' },
+      ],
+    },
   },
   reinforce: {
-    name: 'REINFORCE', family: 'Weights adapt online', score: 32.08,
+    name: 'REINFORCE', family: 'Weights adapt online', score: 32.08, regret: 115.65,
     description: 'Samples one on-policy action and updates LoRA from its scalar factual reward and a past-only EMA baseline. It never queries the teacher.',
     input: 'Visible context only', signal: 'One factual scalar reward', change: '172,032 LoRA parameters',
+    flow: {
+      serve: [
+        { label: 'Visible context x', state: 'used' },
+        { label: 'Hidden state z', state: 'sealed' },
+        { label: 'Evaluator utilities', state: 'sealed' },
+        { label: 'Prompt memory', state: 'absent' },
+      ],
+      post: [
+        { label: 'Factual route outcome', state: 'observed' },
+        { label: 'Scalar reward', state: 'used' },
+        { label: 'Teacher hard sample', state: 'absent' },
+        { label: 'Teacher soft distribution', state: 'absent' },
+      ],
+      adapt: [
+        { label: 'LoRA policy-gradient step', state: 'used' },
+        { label: 'Past-only EMA baseline', state: 'used' },
+      ],
+    },
   },
   sft: {
-    name: 'Online-SFT', family: 'Weights adapt online', score: 41.94,
+    name: 'Online-SFT', family: 'Weights adapt online', score: 41.94, regret: 97.65,
     description: 'Samples one teacher route after execution, converts it to a hard one-hot target, and updates the LoRA adapter online.',
     input: 'Visible context only', signal: 'One sampled teacher route', change: '172,032 LoRA parameters',
+    flow: {
+      serve: [
+        { label: 'Visible context x', state: 'used' },
+        { label: 'Hidden state z', state: 'sealed' },
+        { label: 'Evaluator utilities', state: 'sealed' },
+        { label: 'Prompt memory', state: 'absent' },
+      ],
+      post: [
+        { label: 'Factual route outcome', state: 'observed' },
+        { label: 'Scalar reward', state: 'absent' },
+        { label: 'Teacher hard sample', state: 'used' },
+        { label: 'Teacher soft distribution', state: 'absent' },
+      ],
+      adapt: [
+        { label: 'LoRA one-hot update', state: 'used' },
+        { label: 'Online replay batch of 4', state: 'used' },
+      ],
+    },
   },
   sdft: {
-    name: 'Online-SDFT', family: 'Weights adapt online', score: 64.72,
+    name: 'Online-SDFT', family: 'Weights adapt online', score: 64.72, regret: 36.24,
     description: 'Distills the teacher’s complete soft action distribution into a rank-4 LoRA adapter after each executed action.',
     input: 'Visible context only', signal: 'Post-decision teacher distribution', change: '172,032 LoRA parameters',
+    flow: {
+      serve: [
+        { label: 'Visible context x', state: 'used' },
+        { label: 'Hidden state z', state: 'sealed' },
+        { label: 'Evaluator utilities', state: 'sealed' },
+        { label: 'Prompt memory', state: 'absent' },
+      ],
+      post: [
+        { label: 'Factual route outcome', state: 'observed' },
+        { label: 'Scalar reward', state: 'absent' },
+        { label: 'Teacher hard sample', state: 'absent' },
+        { label: 'Teacher soft distribution', state: 'used' },
+      ],
+      adapt: [
+        { label: 'LoRA soft distillation', state: 'used' },
+        { label: 'Online replay batch of 4', state: 'used' },
+      ],
+    },
   },
 };
 const methodTabs = Array.from(document.querySelectorAll('[data-method]'));
+const signalLists = {
+  serve: byId('signal-serve'),
+  post: byId('signal-post'),
+  adapt: byId('signal-adapt'),
+};
+const stateLabels = {
+  used: 'Used for learning',
+  observed: 'Observed; not a learning target',
+  sealed: 'Sealed from the student',
+  absent: 'Not used by this method',
+};
+
+function renderSignalList(listElement, items) {
+  listElement.innerHTML = items.map((item) => (
+    `<li class="signal-item signal-${item.state}">
+      <span class="signal-state" aria-hidden="true"></span>
+      <span class="signal-label">${item.label}</span>
+      <span class="sr-only">${stateLabels[item.state]}</span>
+    </li>`
+  )).join('');
+}
 
 function activateMethod(methodKey, focus = false) {
   const method = methods[methodKey];
@@ -291,6 +421,15 @@ function activateMethod(methodKey, focus = false) {
   byId('method-change').textContent = method.change;
   byId('method-score').textContent = `${method.score.toFixed(2)}%`;
   byId('method-score-bar').style.width = `${method.score}%`;
+  byId('method-regret').textContent = method.regret.toFixed(2);
+  byId('method-regret-bar').style.width = `${(method.regret / MAX_REGRET) * 100}%`;
+  renderSignalList(signalLists.serve, method.flow.serve);
+  renderSignalList(signalLists.post, method.flow.post);
+  renderSignalList(signalLists.adapt, method.flow.adapt);
+  byId('signal-flow-caption').textContent = (
+    `${method.name}: information channels at serving time, after the executed action, and during adaptation. `
+    + 'Sealed channels never enter the student prompt, replay, teacher target, reward, or gradient.'
+  );
   methodTabs.forEach((tab) => {
     const selected = tab.dataset.method === methodKey;
     tab.setAttribute('aria-selected', String(selected));
