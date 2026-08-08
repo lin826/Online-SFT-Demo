@@ -11,7 +11,7 @@ the same drifting stream—there is no train/test split.
 For a full rerun, select **Runtime → Change runtime type → T4 GPU** in Colab,
 then execute Sections 6.1–6.4. The setup cell preserves Colab's CUDA PyTorch and
 removes its incompatible, unused `torchao` package before loading PEFT. The
-verified T4 run takes about 4 minutes and includes a pass/fail ranking check.
+verified T4 workflow includes a pass/fail ranking check.
 
 ![Online-SDFT causal interaction](figures/online_sdft_process.gif)
 
@@ -24,8 +24,9 @@ Mean over 3 paired 240-event streams; `±` is a 95% confidence interval.
 | Base | 37.08% ± 3.30 | 81.50 ± 2.24 |
 | ICL | 37.50% ± 1.25 | 81.10 ± 1.37 |
 | RAG | 38.75% ± 0.47 | 79.94 ± 7.38 |
-| Online-SFT | 41.25% ± 2.49 | 99.02 ± 13.52 |
-| **Online-SDFT** | **63.75% ± 1.25** | **37.43 ± 0.96** |
+| REINFORCE | 32.08% ± 1.70 | 115.65 ± 16.88 |
+| Online-SFT | 41.94% ± 2.72 | 97.65 ± 13.23 |
+| **Online-SDFT** | **64.72% ± 3.14** | **36.24 ± 1.66** |
 
 These preliminary results come from the real LFM student and replace the
 earlier linear-policy proxy.
@@ -35,7 +36,7 @@ earlier linear-policy proxy.
 | Guide | Covers |
 | --- | --- |
 | [Problem setting](docs/problem-setting.md) | Causal feedback, information boundaries, and online versus batch learning |
-| [Methods](docs/methods.md) | Base, ICL, RAG, Online-SFT, and Online-SDFT |
+| [Methods](docs/methods.md) | Base, ICL, RAG, REINFORCE, Online-SFT, and Online-SDFT |
 | [Evaluation and regret](docs/evaluation.md) | Exact regret calculation, utility weights, and their limitations |
 | [Results and reproduction](docs/results.md) | Protocol, plots, commands, notebook, and artifacts |
 | [Blog draft](BLOG.md) | An accessible narrative about continual, on-device learning and Online-SDFT |
@@ -46,7 +47,7 @@ earlier linear-policy proxy.
 | --- | --- |
 | [`run.py`](run.py) | The supported experiment entry point |
 | [`online_sdft/environment.py`](online_sdft/environment.py) | Stream simulation, factual feedback, rewards, and teacher |
-| [`online_sdft/methods.py`](online_sdft/methods.py) | Liquid LFM policy and the five compared methods |
+| [`online_sdft/methods.py`](online_sdft/methods.py) | Liquid LFM policy and the six compared methods |
 | [`online_sdft/experiment.py`](online_sdft/experiment.py) | Predict → score → execute → learn orchestration |
 | [`online_sdft/reporting.py`](online_sdft/reporting.py) | Metrics, qualitative examples, and figures |
 | [`online_sdft_bandit_demo.ipynb`](online_sdft_bandit_demo.ipynb) | Self-contained walkthrough and playable game |

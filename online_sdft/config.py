@@ -14,7 +14,14 @@ FIG = ROOT / "figures"
 
 ACTIONS = ("INTERRUPT", "LATER", "ARCHIVE")
 ACTION_CODES = ("A", "B", "C")
-METHODS = ("Base", "ICL", "RAG", "Online-SFT", "Online-SDFT")
+METHODS = (
+    "Base",
+    "ICL",
+    "RAG",
+    "REINFORCE",
+    "Online-SFT",
+    "Online-SDFT",
+)
 CATEGORIES = (
     "manager",
     "calendar",
@@ -42,6 +49,9 @@ LORA_R = 4
 LORA_ALPHA = 8
 SFT_LR = 2e-4
 SDFT_LR = 3e-4
+REINFORCE_LR = 1e-4
+REINFORCE_BASELINE_STEP = 0.05
+REINFORCE_ENTROPY_COEF = 0.01
 TEACHER_TEMPERATURE = 0.95
 STUDENT_TEMPERATURE = 1.0
 

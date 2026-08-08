@@ -14,6 +14,7 @@ from online_sdft.methods import (
     OnlineSDFTAgent,
     OnlineSFTAgent,
     RAGAgent,
+    REINFORCEAgent,
     mixed_context_similarity,
 )
 
@@ -22,10 +23,12 @@ class RecordingPolicy:
     def __init__(self):
         self.learning_rate = None
         self.updates = []
+        self.reinforce_updates = []
 
     def start_run(self, learning_rate):
         self.learning_rate = learning_rate
         self.updates.clear()
+        self.reinforce_updates.clear()
 
     def probs(self, context, examples=None):
         del context, examples
@@ -33,6 +36,10 @@ class RecordingPolicy:
 
     def update(self, batch):
         self.updates.append(batch)
+        return 0.0
+
+    def reinforce_update(self, batch, entropy_coef):
+        self.reinforce_updates.append((batch, entropy_coef))
         return 0.0
 
 
@@ -77,7 +84,8 @@ def test_online_sft_keeps_one_hard_teacher_draw():
     observation = StudentObservation("visible", np.ones(3))
     agent.observe(
         observation,
-        np.array([0.1, 0.7, 0.2]),
+        action=0,
+        teacher_distribution=np.array([0.1, 0.7, 0.2]),
         teacher_action=1,
         feedback={"outcome": "factual"},
         rng=np.random.default_rng(0),
@@ -93,7 +101,8 @@ def test_online_sdft_keeps_full_soft_teacher_distribution():
     distribution = np.array([0.1, 0.7, 0.2])
     agent.observe(
         observation,
-        distribution,
+        action=0,
+        teacher_distribution=distribution,
         teacher_action=1,
         feedback={"outcome": "factual"},
         rng=np.random.default_rng(0),
@@ -108,7 +117,8 @@ def test_icl_uses_only_latest_teacher_examples_in_chronological_order():
     for index in range(ICL_K + 2):
         agent.observe(
             visible_observation(f"past-{index}"),
-            np.array([0.2, 0.5, 0.3]),
+            action=0,
+            teacher_distribution=np.array([0.2, 0.5, 0.3]),
             teacher_action=index % 3,
             feedback={"outcome": "factual"},
             rng=np.random.default_rng(index),
@@ -137,7 +147,8 @@ def test_rag_retrieves_visible_nearest_neighbors_best_match_last(monkeypatch):
     for index, past in enumerate((exact_old, distractor, exact_new)):
         agent.observe(
             past,
-            np.array([0.2, 0.5, 0.3]),
+            action=0,
+            teacher_distribution=np.array([0.2, 0.5, 0.3]),
             teacher_action=index,
             feedback={"outcome": "factual"},
             rng=np.random.default_rng(index),
@@ -157,6 +168,32 @@ def test_mixed_similarity_handles_midnight_as_circular_time():
     assert mixed_context_similarity(before_midnight, after_midnight) > (
         mixed_context_similarity(before_midnight, noon)
     )
+
+
+def test_reinforce_uses_only_action_reward_and_causal_baseline():
+    policy = RecordingPolicy()
+    agent = REINFORCEAgent(policy)
+    observation = visible_observation("visible")
+    agent.observe(
+        observation,
+        action=2,
+        teacher_distribution=None,
+        teacher_action=None,
+        feedback={"reward": 0.4},
+        rng=np.random.default_rng(0),
+    )
+    batch, entropy_coef = policy.reinforce_updates[0]
+    assert batch == [("visible", 2, 0.4)]
+    assert entropy_coef > 0
+    assert np.isclose(agent.reward_baseline, 0.02)
+    assert not agent.memory
+
+
+def test_liquid_reinforce_loss_uses_selected_log_prob_and_entropy():
+    source = getsource(LiquidLLMPolicy.reinforce_update)
+    assert "selected_log_probs" in source
+    assert "advantages.detach()" in source
+    assert "entropy_coef * entropy" in source
 
 
 def test_icl_prompt_uses_identical_demonstration_and_query_schema():

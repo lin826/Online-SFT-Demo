@@ -72,10 +72,11 @@ The trade-off is compute. Phones have tight memory, energy, and thermal budgets,
 
 This demo uses
 [`LiquidAI/LFM2.5-230M`](https://huggingface.co/LiquidAI/LFM2.5-230M),
-a compact causal language model designed for on-device use. Its base weights stay
-frozen; Online-SFT and Online-SDFT update a rank-4 LoRA adapter with 172,032
-trainable parameters. This is an actual LLM experiment, although it is still a
-simulator—not a measurement of phone battery, latency, or thermal behavior.
+a compact causal language model designed for on-device use. Its base weights
+stay frozen; REINFORCE, Online-SFT, and Online-SDFT update a rank-4 LoRA adapter
+with 172,032 trainable parameters. This is an actual LLM experiment, although
+it is still a simulator—not a measurement of phone battery, latency, or thermal
+behavior.
 
 The Liquid model is the deployed student. The post-decision teacher in this
 controlled experiment is an explicit stochastic simulator policy, chosen so
@@ -160,7 +161,7 @@ for each request x_t, in arrival order:
 
 The separation is explicit in code:
 [environment.py](online_sdft/environment.py) owns the simulated world and
-teacher, [methods.py](online_sdft/methods.py) owns the Liquid student and five
+teacher, [methods.py](online_sdft/methods.py) owns the Liquid student and six
 algorithms, and [experiment.py](online_sdft/experiment.py) enforces the causal
 ordering.
 
@@ -186,14 +187,16 @@ The reported LLM experiment runs **3 paired streams**. Each stream contains
 weekday (80) → on-call (80) → off-hours (80)
 ```
 
-All five methods see the same streams. They normally execute the route with the
-highest LFM action-token probability and use 6% uniform exploration:
+All six methods see the same streams. Five execute the route with the highest
+LFM action-token probability plus 6% uniform exploration. REINFORCE must sample
+from its LFM policy because the policy-gradient estimator is on-policy:
 
 | Method | Adaptation mechanism |
 | --- | --- |
 | Base | Frozen Liquid LFM2.5-230M |
 | ICL | Last 12 teacher samples enter the frozen LFM prompt |
 | RAG | 12 nearest past teacher samples enter the frozen LFM prompt |
+| REINFORCE | Batch-one LoRA update from factual scalar reward only |
 | Online-SFT | LoRA updates from one sampled hard teacher action |
 | Online-SDFT | LoRA updates from the full teacher distribution |
 
@@ -206,16 +209,21 @@ The hidden utility vector is available to the evaluator because this is a simula
 
 ### Result: soft online targets learn faster
 
-![Online accuracy and cumulative regret for Base, ICL, RAG, Online-SFT, and Online-SDFT](figures/bandit_accuracy.png)
+![Online accuracy and cumulative regret for all six methods](figures/bandit_accuracy.png)
 
 *Higher is better on the left; lower is better on the right. Error bars are 95% confidence intervals over paired streams.*
 
-Online-SDFT reaches **63.75% ± 1.25** online accuracy with **37.43 ± 0.96**
+Online-SDFT reaches **64.72% ± 3.14** online accuracy with **36.24 ± 1.66**
 cumulative regret. RAG, the strongest frozen baseline by accuracy, reaches
 **38.75% ± 0.47** accuracy and **79.94 ± 7.38** regret.
 
+REINFORCE reaches **32.08% ± 1.70** accuracy and **115.65 ± 16.88** regret.
+It increasingly learns to archive: silence often returns reward zero, which is
+safer than a noisy negative push or digest reward but can disagree with the
+evaluator's fuller utility. REINFORCE cannot use that hidden utility vector.
+
 Relative to Online-SFT, keeping the complete teacher distribution adds
-**23.33 accuracy points** and removes **59.49 regret units** on average.
+**22.78 accuracy points** and removes **61.41 regret units** on average.
 Online-SDFT wins both metrics in all three paired streams. Three seeds make this
 a preliminary demonstration, not a production-scale statistical claim.
 
@@ -226,22 +234,24 @@ a preliminary demonstration, not a production-scale statistical claim.
 *The dashed lines mark the shifts from weekday to on-call and from on-call to off-hours.*
 
 The blue SDFT curve rises as interactions accumulate while its regret grows much
-more slowly. Its phase accuracy moves from **49.58%** during weekday requests to
-**60.83%** on call and **77.08%** off hours. These are not held-out test
+more slowly. Its phase accuracy moves from **52.50%** during weekday requests to
+**63.75%** on call and **77.92%** off hours. These are not held-out test
 segments: each point records performance while the model is still adapting.
 
 ### Three decisions from the learning trace
 
-**Step 94 — an on-call social item.** Every comparison method defers it;
-Online-SDFT archives it. Its factual result is **ORGANIC_INBOX_OPEN**—not a
-fictional push or digest click.
+**Step 82 — an on-call monitoring incident.** Base, ICL, RAG, and Online-SFT
+defer; REINFORCE archives; Online-SDFT interrupts. The push is dismissed. That
+single outcome does not retroactively change the fact that the action was
+scored before feedback.
 
-**Step 113 — an on-call monitoring incident.** Every comparison method defers
-it; Online-SDFT interrupts, and the factual outcome is **OPENED_PUSH**.
+**Step 105 — another monitoring incident.** REINFORCE again archives and sees
+**NO_OBSERVATION**. Online-SDFT interrupts and receives **OPENED_PUSH**; the
+remaining methods defer.
 
-**Step 117 — another on-call social item.** Online-SDFT archives and observes an
-organic inbox open. Online-SFT interrupts and observes **IGNORED_PUSH**; the
-frozen methods defer.
+**Step 113 — a third monitoring incident.** Online-SDFT interrupts and receives
+**OPENED_PUSH**. The frozen methods and Online-SFT defer, while REINFORCE's
+reward-only policy archives and again receives no observation.
 
 These examples show the intended learning trajectory: not memorizing a universal “archive receipts” rule, but accumulating uncertain evidence and adjusting as context changes.
 

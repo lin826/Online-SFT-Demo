@@ -28,6 +28,9 @@ from .config import (
     OUT,
     PHASE_LENGTH,
     RAG_K,
+    REINFORCE_BASELINE_STEP,
+    REINFORCE_ENTROPY_COEF,
+    REINFORCE_LR,
     REGIMES,
     REPLAY_SIZE,
     SDFT_LR,
@@ -45,6 +48,16 @@ from .methods import LiquidLLMPolicy, StudentPolicy, create_agent
 from .reporting import write_compact_results, write_figures
 
 
+METHOD_RNG_OFFSETS = {
+    "Base": 5,
+    "ICL": 18,
+    "RAG": 31,
+    "Online-SFT": 44,
+    "Online-SDFT": 57,
+    "REINFORCE": 70,
+}
+
+
 def epsilon_greedy(probs: np.ndarray) -> np.ndarray:
     """Return the declared serving distribution over the student's ranking."""
     greedy = one_hot(int(np.argmax(probs)), len(ACTIONS))
@@ -52,6 +65,12 @@ def epsilon_greedy(probs: np.ndarray) -> np.ndarray:
         (1 - EXPLORATION_EPSILON) * greedy
         + EXPLORATION_EPSILON / len(ACTIONS)
     )
+    return behavior / behavior.sum()
+
+
+def policy_sampling(probs: np.ndarray) -> np.ndarray:
+    """Normalize the differentiable policy used by REINFORCE to act."""
+    behavior = np.clip(np.asarray(probs, dtype=float), 1e-8, None)
     return behavior / behavior.sum()
 
 
@@ -65,9 +84,7 @@ def run_method(
     environment: NotificationRoutingEnvironment = DEFAULT_ENVIRONMENT,
 ) -> dict:
     """Run one method on one stream with predict-then-learn ordering."""
-    rng = np.random.default_rng(
-        seed * 100 + METHODS.index(method) * 13 + 5
-    )
+    rng = np.random.default_rng(seed * 100 + METHOD_RNG_OFFSETS[method])
     agent = create_agent(method, policy)
     cumulative_regret = 0.0
     cumulative_correct = 0
@@ -78,7 +95,11 @@ def run_method(
     for step, event in enumerate(stream, start=1):
         observation = environment.student_observation(event)
         student_probs = agent.action_probs(observation)
-        behavior_probs = epsilon_greedy(student_probs)
+        behavior_probs = (
+            policy_sampling(student_probs)
+            if agent.samples_from_policy
+            else epsilon_greedy(student_probs)
+        )
         action = int(
             rng.choice(len(ACTIONS), p=behavior_probs)
         )
@@ -96,16 +117,29 @@ def run_method(
         phase_total[event.phase] += 1
         phase_regret[event.phase] += step_regret
 
-        # Execute only the chosen route, then create teacher supervision.
+        # Execute only the chosen route. REINFORCE consumes factual reward
+        # directly; imitation methods receive a post-decision teacher target.
         feedback = environment.execute(event, action, rng)
-        teacher_probs = environment.teacher_distribution(
-            event,
+        teacher_probs = None
+        teacher_action = None
+        if agent.uses_teacher:
+            teacher_probs = environment.teacher_distribution(
+                event,
+                action,
+                feedback,
+                rng,
+            )
+            teacher_action = int(
+                rng.choice(len(ACTIONS), p=teacher_probs)
+            )
+
+        agent.observe(
+            observation,
             action,
+            teacher_probs,
+            teacher_action,
             feedback,
             rng,
-        )
-        teacher_action = int(
-            rng.choice(len(ACTIONS), p=teacher_probs)
         )
 
         record = {
@@ -124,10 +158,16 @@ def run_method(
             ),
             "action": ACTIONS[action],
             "feedback": feedback,
-            "teacher_probs": dict(
-                zip(ACTIONS, map(float, teacher_probs))
+            "teacher_probs": (
+                None
+                if teacher_probs is None
+                else dict(zip(ACTIONS, map(float, teacher_probs)))
             ),
-            "teacher_rollout": ACTIONS[teacher_action],
+            "teacher_rollout": (
+                None
+                if teacher_action is None
+                else ACTIONS[teacher_action]
+            ),
             "oracle_action_scoring_only": ACTIONS[oracle_action],
             "correct_online": correct,
             "step_regret": step_regret,
@@ -135,14 +175,6 @@ def run_method(
             "cum_accuracy": cumulative_correct / step,
         }
         rollout_writer.write(json.dumps(record) + "\n")
-
-        agent.observe(
-            observation,
-            teacher_probs,
-            teacher_action,
-            feedback,
-            rng,
-        )
 
         curve_writer.writerow(
             {
@@ -199,7 +231,8 @@ def experiment_config(
         "device": str(policy.device),
         "exploration_epsilon": EXPLORATION_EPSILON,
         "behavior_policy": (
-            "epsilon-greedy over LFM next-token probabilities"
+            "epsilon-greedy for non-RL methods; LFM policy sampling for "
+            "REINFORCE"
         ),
         "replay_size": REPLAY_SIZE,
         "online_batch_size": ONLINE_BATCH_SIZE,
@@ -208,11 +241,20 @@ def experiment_config(
         "rag_similarity": (
             "equal-weight mixed visible fields; circular hour"
         ),
+        "reinforce_lr": REINFORCE_LR,
+        "reinforce_batch_size": 1,
+        "reinforce_baseline": (
+            f"causal reward EMA; step={REINFORCE_BASELINE_STEP}"
+        ),
+        "reinforce_entropy_coef": REINFORCE_ENTROPY_COEF,
         "sft_lr": SFT_LR,
         "sdft_lr": SDFT_LR,
         "teacher_temperature": TEACHER_TEMPERATURE,
         "evaluation": "prequential one-stream; predict then learn",
-        "learning_signal": "teacher rollouts only; oracle scoring only",
+        "learning_signal": (
+            "teacher targets for imitation; factual reward only for "
+            "REINFORCE; oracle scoring only"
+        ),
     }
 
 

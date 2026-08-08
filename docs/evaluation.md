@@ -7,7 +7,7 @@
 | Signal | Form | Used by |
 | --- | --- | --- |
 | Online accuracy | Binary match with the evaluator's best route | Evaluation only |
-| Factual feedback | One sampled outcome and reward for the chosen route | Post-decision teacher |
+| Factual feedback | One sampled outcome and reward for the chosen route | Post-decision teacher; reward-only REINFORCE |
 | Regret | Real-valued utility gap | Evaluation only |
 
 Accuracy says whether the selected action was best. Regret says **how costly the mistake was**:
@@ -38,7 +38,7 @@ Absolute utility units are arbitrary—multiplying all coefficients by a constan
 would rescale regret without changing the preferred action. Comparisons are
 therefore meaningful only within this fixed benchmark.
 
-## Factual reward used by the teacher
+## Factual reward used by the teacher and REINFORCE
 
 The chosen route also returns a smaller reward that tilts only its teacher score:
 
@@ -48,12 +48,15 @@ The chosen route also returns a smaller reward that tilts only its teacher score
 | Later | open `+0.48`; ignore `−0.16` | `−0.28U` | Gentler delivery, but delay hurts urgent items |
 | Archive | organic open `+0.16`; otherwise `0` | none | Silence is neutral; organic discovery is weak evidence |
 
-This factual reward affects future teacher supervision; it does **not** enter regret. Keeping the two signals separate prevents observed engagement from becoming a counterfactual oracle label.
+This factual reward affects future teacher supervision and is REINFORCE's only
+learning signal; it does **not** enter regret. Keeping the two signals separate
+prevents observed engagement from becoming a counterfactual oracle label.
 
 ## Exact ordering in code
 
 ```text
 a_t = epsilon_greedy(student(x_t, past), epsilon=0.06)
+# REINFORCE instead samples a_t ~ student(. | x_t)
 u_t = oracle_utilities(hidden_simulator_state)   # evaluator only
 best_t = argmax(u_t)
 step_regret = u_t[best_t] - u_t[a_t]             # score is frozen
@@ -61,6 +64,9 @@ step_regret = u_t[best_t] - u_t[a_t]             # score is frozen
 z_t = execute_only(a_t)                          # one factual outcome
 q_t = teacher(x_t, a_t, z_t)
 update_for_t_plus_1(q_t)
+
+# REINFORCE never queries q_t:
+update_for_t_plus_1(z_t.reward - past_only_baseline)
 ```
 
 The simulator-only utilities and factual execution live in

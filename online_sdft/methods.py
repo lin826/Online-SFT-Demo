@@ -1,8 +1,9 @@
-"""LLM policy and the five compared online-learning methods.
+"""LLM policy and the compared online-learning methods.
 
 Every method consumes :class:`StudentObservation`, which contains no
 post-decision telemetry. Environment execution and rewards are intentionally
-absent from this module.
+not simulated in this module; REINFORCE receives only the executed route's
+scalar reward after acting.
 """
 
 from __future__ import annotations
@@ -22,6 +23,9 @@ from .config import (
     MODEL_ID,
     ONLINE_BATCH_SIZE,
     RAG_K,
+    REINFORCE_BASELINE_STEP,
+    REINFORCE_ENTROPY_COEF,
+    REINFORCE_LR,
     REPLAY_SIZE,
     SDFT_LR,
     SFT_LR,
@@ -43,6 +47,12 @@ class StudentPolicy(Protocol):
     ) -> np.ndarray: ...
 
     def update(self, batch: list[tuple[str, np.ndarray]]) -> float: ...
+
+    def reinforce_update(
+        self,
+        batch: list[tuple[str, int, float]],
+        entropy_coef: float,
+    ) -> float: ...
 
 
 class LiquidLLMPolicy:
@@ -238,6 +248,53 @@ class LiquidLLMPolicy:
         self.optimizer.step()
         return float(loss.detach().cpu())
 
+    def reinforce_update(
+        self,
+        batch: list[tuple[str, int, float]],
+        entropy_coef: float,
+    ) -> float:
+        """Apply one on-policy action-token REINFORCE update."""
+        if self.optimizer is None:
+            raise RuntimeError(
+                "start_run must receive a learning rate before update"
+            )
+        self.model.train()
+        prompts = [self.render_prompt(context) for context, _, _ in batch]
+        actions = self.torch.tensor(
+            [action for _, action, _ in batch],
+            device=self.device,
+            dtype=self.torch.long,
+        )
+        advantages = self.torch.tensor(
+            [advantage for _, _, advantage in batch],
+            device=self.device,
+            dtype=self.torch.float32,
+        )
+        logits = self._action_logits(prompts) / STUDENT_TEMPERATURE
+        log_probs = self.torch.log_softmax(logits, dim=-1)
+        selected_log_probs = log_probs.gather(
+            1,
+            actions.unsqueeze(1),
+        ).squeeze(1)
+        probabilities = log_probs.exp()
+        entropy = -(probabilities * log_probs).sum(-1)
+        loss = -(
+            advantages.detach() * selected_log_probs
+            + entropy_coef * entropy
+        ).mean()
+        self.optimizer.zero_grad(set_to_none=True)
+        loss.backward()
+        self.torch.nn.utils.clip_grad_norm_(
+            (
+                parameter
+                for parameter in self.model.parameters()
+                if parameter.requires_grad
+            ),
+            max_norm=1.0,
+        )
+        self.optimizer.step()
+        return float(loss.detach().cpu())
+
 
 @dataclass
 class TeacherRecord:
@@ -306,6 +363,8 @@ class OnlineAgent:
 
     name = "Base"
     learning_rate: float | None = None
+    samples_from_policy = False
+    uses_teacher = True
 
     def __init__(self, policy: StudentPolicy):
         self.policy = policy
@@ -337,12 +396,16 @@ class OnlineAgent:
     def observe(
         self,
         observation: StudentObservation,
-        teacher_distribution: np.ndarray,
-        teacher_action: int,
+        action: int,
+        teacher_distribution: np.ndarray | None,
+        teacher_action: int | None,
         feedback: dict,
         rng: np.random.Generator,
     ) -> None:
         """Retain legal history and, for trainable agents, update online."""
+        del action
+        if teacher_distribution is None or teacher_action is None:
+            raise ValueError("teacher-supervised method requires a teacher")
         self.memory.append(
             TeacherRecord(
                 observation=observation,
@@ -422,6 +485,40 @@ class RAGAgent(OnlineAgent):
         return [record.prompt_example() for _, _, record in closest]
 
 
+class REINFORCEAgent(OnlineAgent):
+    """Online policy gradient from the selected route's factual reward only."""
+
+    name = "REINFORCE"
+    learning_rate = REINFORCE_LR
+    samples_from_policy = True
+    uses_teacher = False
+
+    def __init__(self, policy: StudentPolicy):
+        self.reward_baseline = 0.0
+        super().__init__(policy)
+
+    def observe(
+        self,
+        observation: StudentObservation,
+        action: int,
+        teacher_distribution: np.ndarray | None,
+        teacher_action: int | None,
+        feedback: dict,
+        rng: np.random.Generator,
+    ) -> None:
+        """Take a batch-one update; no teacher field is read or retained."""
+        del teacher_distribution, teacher_action, rng
+        reward = float(feedback["reward"])
+        advantage = reward - self.reward_baseline
+        self.policy.reinforce_update(
+            [(observation.text, action, advantage)],
+            entropy_coef=REINFORCE_ENTROPY_COEF,
+        )
+        self.reward_baseline += REINFORCE_BASELINE_STEP * (
+            reward - self.reward_baseline
+        )
+
+
 class OnlineSFTAgent(OnlineAgent):
     """Online LoRA update from one sampled hard teacher rollout."""
 
@@ -458,6 +555,7 @@ AGENT_CLASSES = {
         BaseAgent,
         ICLAgent,
         RAGAgent,
+        REINFORCEAgent,
         OnlineSFTAgent,
         OnlineSDFTAgent,
     )

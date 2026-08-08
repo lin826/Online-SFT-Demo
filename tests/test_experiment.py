@@ -15,11 +15,13 @@ class OrderedPolicy:
     def __init__(self, calls):
         self.calls = calls
         self.updates = []
+        self.reinforce_updates = []
         self.example_counts = []
 
     def start_run(self, learning_rate):
         self.learning_rate = learning_rate
         self.updates.clear()
+        self.reinforce_updates.clear()
 
     def probs(self, context, examples=None):
         del context
@@ -30,6 +32,11 @@ class OrderedPolicy:
     def update(self, batch):
         self.calls.append("update")
         self.updates.append(batch)
+        return 0.0
+
+    def reinforce_update(self, batch, entropy_coef):
+        self.calls.append("update")
+        self.reinforce_updates.append((batch, entropy_coef))
         return 0.0
 
 
@@ -124,6 +131,29 @@ def test_frozen_baselines_never_update_weights():
     for method in METHODS[:3]:
         _, policy, _, _ = run_fast_method(method)
         assert not policy.updates
+        assert not policy.reinforce_updates
+
+
+def test_reinforce_samples_policy_and_never_requests_teacher():
+    calls, policy, metrics, rollouts = run_fast_method("REINFORCE")
+    assert calls[:5] == [
+        "context",
+        "act",
+        "score",
+        "execute",
+        "update",
+    ]
+    assert "teacher" not in calls
+    assert len(policy.reinforce_updates) == STREAM_LENGTH
+    assert not policy.updates
+    assert metrics["method"] == "REINFORCE"
+    assert rollouts[0]["behavior_probs"] == {
+        "INTERRUPT": 0.2,
+        "LATER": 0.6,
+        "ARCHIVE": 0.2,
+    }
+    assert rollouts[0]["teacher_probs"] is None
+    assert rollouts[0]["teacher_rollout"] is None
 
 
 def test_icl_and_rag_prompts_contain_strictly_past_records_only():

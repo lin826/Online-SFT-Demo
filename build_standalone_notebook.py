@@ -627,7 +627,8 @@ AGGREGATE_PLOT = r'''
 import matplotlib.pyplot as plt
 
 colors = {"Base": "#98A2B3", "ICL": "#D9903D", "RAG": "#D95C59",
-          "Online-SFT": "#7D68B3", "Online-SDFT": "#0D9488"}
+          "REINFORCE": "#2A9D8F", "Online-SFT": "#7D68B3",
+          "Online-SDFT": "#0D6EFD"}
 
 fig, axes = plt.subplots(1, 2, figsize=(12.5, 4.5))
 x_positions = np.arange(len(METHODS))
@@ -659,7 +660,8 @@ LEARNING_CURVES = r'''
 import matplotlib.pyplot as plt
 
 colors = {"Base": "#98A2B3", "ICL": "#D9903D", "RAG": "#D95C59",
-          "Online-SFT": "#7D68B3", "Online-SDFT": "#0D9488"}
+          "REINFORCE": "#2A9D8F", "Online-SFT": "#7D68B3",
+          "Online-SDFT": "#0D6EFD"}
 
 by_accuracy, by_regret = defaultdict(list), defaultdict(list)
 for row in curves:
@@ -801,10 +803,11 @@ Mean over 3 paired streams:
 | Base | 37.08% ± 3.30 | 81.50 ± 2.24 |
 | ICL | 37.50% ± 1.25 | 81.10 ± 1.37 |
 | RAG | 38.75% ± 0.47 | 79.94 ± 7.38 |
-| Online-SFT | 41.25% ± 2.49 | 99.02 ± 13.52 |
-| **Online-SDFT** | **63.75% ± 1.25** | **37.43 ± 0.96** |
+| REINFORCE | 32.08% ± 1.70 | 115.65 ± 16.88 |
+| Online-SFT | 41.94% ± 2.72 | 97.65 ± 13.23 |
+| **Online-SDFT** | **64.72% ± 3.14** | **36.24 ± 1.66** |
 
-**Short conclusion:** the full soft teacher distribution is a substantially better online target than one sampled hard teacher action. Stop here if you only need the result."""
+**Short conclusion:** the full soft teacher distribution is a substantially better online target than one sampled hard action or scalar reward. Stop here if you only need the result."""
         ),
         nbf.v4.new_markdown_cell(
             """## 2. Watch one causal round
@@ -858,7 +861,7 @@ Commit mentally before revealing the outcome. The engine cell is collapsed becau
 | --- | --- | --- |
 | Student rollout | current context, parameters, past factual records | current feedback, future events, scoring oracle |
 | Environment | outcome caused by the selected action | outcomes for both unchosen actions |
-| Online update | post-decision teacher target, batch ≤4 | oracle action, ground-truth demonstration, retroactive correction |
+| Online update | factual reward or post-decision teacher target, batch ≤4 | oracle action, ground-truth demonstration, retroactive correction |
 
 The evaluator can grade the frozen action from hidden simulator state, but neither student nor teacher receives its utility vector."""
         ),
@@ -877,21 +880,22 @@ There is no train/test split. The stream drifts from weekday to on-call to off-h
         nbf.v4.new_markdown_cell(
             """## 5. Compare the methods
 
-### 5.1 Five methods on the same stream
+### 5.1 Six methods on the same stream
 
 | Method | Online adaptation |
 | --- | --- |
 | Base | Frozen Liquid LFM2.5-230M |
 | ICL | Last 12 sampled teacher actions in the frozen LFM prompt |
 | RAG | 12 nearest past sampled teacher actions in the frozen LFM prompt |
+| REINFORCE | Batch-one LoRA policy gradient from factual reward only |
 | Online-SFT | LoRA update from one sampled teacher action |
 | **Online-SDFT** | LoRA update from the teacher's full soft distribution |
 
-All methods normally take the route with the highest LFM action-token
-probability, use the same 6% uniform exploration, and never receive the
-evaluator's preferred action. The LFM is the deployed student; the controlled
-benchmark uses an explicit stochastic simulator policy as its auditable
-post-decision teacher."""
+Five methods take the route with the highest LFM action-token probability plus
+6% uniform exploration. REINFORCE samples from its LFM distribution because its
+gradient is on-policy. No method receives the evaluator's preferred action.
+The LFM is the deployed student; the controlled benchmark uses an explicit
+stochastic simulator policy as its auditable post-decision teacher."""
         ),
         nbf.v4.new_markdown_cell(
             """### 5.2 ICL and RAG implementation contract
@@ -909,7 +913,19 @@ learned retriever because that would add side labeled data; learning retrieval
 from past records would define another online-learning method."""
         ),
         nbf.v4.new_markdown_cell(
-            """### 5.3 Online-SFT versus Online-SDFT
+            """### 5.3 REINFORCE: scalar reward only
+
+REINFORCE samples `a_t ~ student(. | x_t)`, executes that route, and updates a
+rank-4 LoRA adapter from `(reward - past-only EMA baseline) × log π(a_t|x_t)`.
+It uses batch size 1 plus a small entropy bonus. It never queries the teacher,
+uses replay, observes an unchosen reward, or receives the scoring utility.
+
+This is the hardest feedback channel in the comparison: archive silence often
+returns zero reward, which can be safer than a noisy negative push/digest reward
+without revealing which unchosen route would have served the user better."""
+        ),
+        nbf.v4.new_markdown_cell(
+            """### 5.4 Online-SFT versus Online-SDFT
 
 | | Online-SFT | Online-SDFT |
 | --- | --- | --- |
@@ -940,13 +956,13 @@ the detected GPU. Local CPU and Apple MPS runs remain supported."""
         nbf.v4.new_markdown_cell(
             """### 6.2 Load the embedded simulator and policies
 
-This long cell defines the stream, factual feedback, scoring oracle, teacher, five methods, and online update loop. It reads no external file."""
+This long cell defines the stream, factual feedback, scoring oracle, teacher, six methods, and online update loop. It reads no external file."""
         ),
         reader_code_cell(embedded_core(), "Optional: embedded simulator and method implementation"),
         nbf.v4.new_markdown_cell(
             """### 6.3 Run the paired streams
 
-All artifacts remain in memory: 3 seeds × 5 methods × 240 online decisions.
+All artifacts remain in memory: 3 seeds × 6 methods × 240 online decisions.
 This executes real LFM inference and online LoRA updates. The cell prints one
 line after every method so a long GPU run never looks stalled."""
         ),
@@ -954,12 +970,11 @@ line after every method so a long GPU run never looks stalled."""
         nbf.v4.new_markdown_cell(
             """### 6.4 Confirm the recomputed metrics
 
-The saved headline table uses the FP32 CPU run. A T4 uses FP16 tensor cores, so
+The saved headline table uses an FP32 Apple MPS run. A T4 uses FP16 tensor cores, so
 a few borderline actions can differ numerically; compare the conclusion rather
-than demand bit-for-bit equality. In the verified Colab run (`torch 2.11.0`,
-`transformers 5.13.1`, `peft 0.19.1`), all 3 streams finished in about 4 minutes
-and Online-SDFT reached **62.22% accuracy / 42.59 regret**. The cell below fails
-loudly unless Online-SDFT beats every baseline on both metrics."""
+than demand bit-for-bit equality. The run takes several minutes on a T4. The
+cell below fails loudly unless Online-SDFT beats every baseline on both
+metrics."""
         ),
         reader_code_cell(RESULTS, "Display the recomputed result table"),
         nbf.v4.new_markdown_cell(

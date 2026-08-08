@@ -17,11 +17,14 @@ def test_published_run_uses_liquid_lfm_and_online_protocol():
     assert config["student_model"] == MODEL_ID
     assert config["evaluation"] == "prequential one-stream; predict then learn"
     assert config["learning_signal"] == (
-        "teacher rollouts only; oracle scoring only"
+        "teacher targets for imitation; factual reward only for "
+        "REINFORCE; oracle scoring only"
     )
     assert config["online_batch_size"] <= 4
     assert config["icl_examples"] == ICL_K
     assert config["rag_examples"] == RAG_K == ICL_K
+    assert config["reinforce_batch_size"] == 1
+    assert config["reinforce_entropy_coef"] > 0
 
 
 def test_online_sdft_beats_every_published_baseline_on_both_metrics():

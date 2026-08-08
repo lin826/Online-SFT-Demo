@@ -133,6 +133,7 @@ def write_figures(
         "Base": "#9aa0a6",
         "ICL": "#e8710a",
         "RAG": "#d93025",
+        "REINFORCE": "#00897b",
         "Online-SFT": "#7b3fa0",
         "Online-SDFT": "#1a73e8",
     }

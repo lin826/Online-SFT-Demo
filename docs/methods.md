@@ -2,16 +2,17 @@
 
 [← Main README](../README.md)
 
-All five methods face the same paired event streams. Each normally executes the
-route with the highest LFM action-token probability and uses 6% uniform
-exploration. No method sees current feedback or the evaluator's preferred action
-before committing.
+All six methods face the same paired event streams. Five use the highest LFM
+action-token probability with 6% uniform exploration. REINFORCE samples from
+its LFM policy because its gradient requires on-policy actions. No method sees
+current feedback or the evaluator's preferred action before committing.
 
 | Method | Adaptation mechanism |
 | --- | --- |
 | Base | Frozen Liquid LFM2.5-230M |
 | ICL | Last 12 sampled teacher actions enter the LFM prompt; weights stay frozen |
 | RAG | 12 nearest past teacher actions enter the LFM prompt; weights stay frozen |
+| REINFORCE | Batch-one LoRA policy-gradient update from factual scalar reward only |
 | Online-SFT | Updates a LoRA adapter from one sampled, one-hot teacher action |
 | **Online-SDFT** | Updates the same LoRA adapter from the teacher's complete soft action distribution |
 
@@ -36,9 +37,10 @@ visible notification fields and asks for one single-token code:
 `A = INTERRUPT`, `B = LATER`, or `C = ARCHIVE`. The softmax over those three
 next-token logits is the student's action distribution.
 
-Online-SFT and Online-SDFT train a rank-4 LoRA adapter with 172,032 trainable
-parameters. The underlying 230M-parameter LFM stays frozen. Base, ICL, and RAG
-use the same LFM and identically initialized adapter but do not update weights.
+REINFORCE, Online-SFT, and Online-SDFT train a rank-4 LoRA adapter with 172,032
+trainable parameters. The underlying 230M-parameter LFM stays frozen. Base,
+ICL, and RAG use the same LFM and identically initialized adapter but do not
+update weights.
 
 The LLM is the deployed student. For a controlled, auditable benchmark, the
 privileged teacher is an explicit stochastic simulator policy rather than a
@@ -92,6 +94,31 @@ Authoritative implementation: [`LiquidLLMPolicy.render_prompt`](../online_sdft/m
 [`run_method`](../online_sdft/experiment.py): act first, append memory only
 after execution and teacher feedback.
 
+## REINFORCE, exactly
+
+REINFORCE is the reward-only contextual-bandit baseline. It does not query or
+store the teacher. At round `t`, it samples from the LFM action distribution,
+executes that one route, and receives only its factual scalar reward `r_t`.
+A past-only exponential moving average `b_t` reduces variance:
+
+```text
+a_t ~ student(. | x_t)
+r_t = execute_only(a_t).reward
+A_t = r_t - b_t
+
+loss = -A_t log student(a_t | x_t) - 0.01 * entropy(student(. | x_t))
+update_lora([(x_t, a_t, A_t)])        # batch size 1; affects t+1
+b_(t+1) = b_t + 0.05 * (r_t - b_t)
+```
+
+There is no replay, reward-to-go, counterfactual reward, teacher distribution,
+or oracle action. Because this is a one-step contextual bandit, the observed
+reward is the complete return. The entropy term discourages immediate collapse;
+the causal baseline never includes the current reward before computing the
+advantage. [`REINFORCEAgent`](../online_sdft/methods.py) owns the baseline and
+[`LiquidLLMPolicy.reinforce_update`](../online_sdft/methods.py) owns the
+selected-action log-probability loss.
+
 ## Online-SDFT contract
 
 The implementation enforces the three defining requirements:
@@ -128,7 +155,7 @@ SDFT does not train on ground-truth demonstrations. Its advantage comes from pre
 
 The authoritative code is deliberately separated:
 [`environment.py`](../online_sdft/environment.py) owns the privileged teacher,
-[`methods.py`](../online_sdft/methods.py) owns the LFM and all five agents, and
+[`methods.py`](../online_sdft/methods.py) owns the LFM and all six agents, and
 [`experiment.py`](../online_sdft/experiment.py) owns the chronological
 interaction loop.
 
