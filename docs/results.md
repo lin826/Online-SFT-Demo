@@ -12,7 +12,7 @@
 | Serving policy | LFM argmax with 6% uniform exploration |
 | Student | LiquidAI/LFM2.5-230M |
 | Trainable state | Rank-4 LoRA, 172,032 parameters |
-| Canonical runtime | CPU, one isolated process per seed |
+| Published runtime | Apple MPS, one isolated model load per seed |
 | Methods | Base, ICL, RAG, Online-SFT, Online-SDFT |
 | Primary metrics | Prequential online accuracy and cumulative regret |
 
@@ -25,10 +25,10 @@ Mean `±` 95% confidence interval:
 | Method | Online accuracy | Cumulative regret ↓ |
 | --- | ---: | ---: |
 | Base | 37.08% ± 3.30 | 81.50 ± 2.24 |
-| ICL | 37.08% ± 1.70 | 81.65 ± 0.87 |
-| RAG | 38.61% ± 0.98 | 81.63 ± 6.75 |
-| Online-SFT | 39.17% ± 5.10 | 102.82 ± 10.98 |
-| **Online-SDFT** | **62.50% ± 5.66** | **43.33 ± 4.81** |
+| ICL | 37.50% ± 1.25 | 81.10 ± 1.37 |
+| RAG | 38.75% ± 0.47 | 79.94 ± 7.38 |
+| Online-SFT | 41.25% ± 2.49 | 99.02 ± 13.52 |
+| **Online-SDFT** | **63.75% ± 1.25** | **37.43 ± 0.96** |
 
 ![Aggregate comparison](../figures/bandit_accuracy.png)
 

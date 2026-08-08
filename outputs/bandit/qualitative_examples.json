@@ -1,6 +1,70 @@
 [
   {
     "seed": 0,
+    "t": 82,
+    "regime": "on-call",
+    "category": "monitoring",
+    "oracle_action_scoring_only": "INTERRUPT",
+    "methods": {
+      "Base": {
+        "action": "LATER",
+        "feedback": {
+          "action_taken": "LATER",
+          "channel": "digest_delivered",
+          "outcome": "IGNORED_DIGEST",
+          "delay_minutes": 90,
+          "reward": -0.3578
+        },
+        "teacher_rollout": "INTERRUPT"
+      },
+      "ICL": {
+        "action": "LATER",
+        "feedback": {
+          "action_taken": "LATER",
+          "channel": "digest_delivered",
+          "outcome": "IGNORED_DIGEST",
+          "delay_minutes": 90,
+          "reward": -0.3578
+        },
+        "teacher_rollout": "LATER"
+      },
+      "RAG": {
+        "action": "LATER",
+        "feedback": {
+          "action_taken": "LATER",
+          "channel": "digest_delivered",
+          "outcome": "IGNORED_DIGEST",
+          "delay_minutes": 90,
+          "reward": -0.3578
+        },
+        "teacher_rollout": "LATER"
+      },
+      "Online-SFT": {
+        "action": "LATER",
+        "feedback": {
+          "action_taken": "LATER",
+          "channel": "digest_delivered",
+          "outcome": "IGNORED_DIGEST",
+          "delay_minutes": 90,
+          "reward": -0.3578
+        },
+        "teacher_rollout": "INTERRUPT"
+      },
+      "Online-SDFT": {
+        "action": "INTERRUPT",
+        "feedback": {
+          "action_taken": "INTERRUPT",
+          "channel": "push_delivered",
+          "outcome": "DISMISSED_PUSH",
+          "delay_minutes": 0,
+          "reward": -0.6817
+        },
+        "teacher_rollout": "INTERRUPT"
+      }
+    }
+  },
+  {
+    "seed": 0,
     "t": 94,
     "regime": "on-call",
     "category": "social",
@@ -257,6 +321,134 @@
   },
   {
     "seed": 0,
+    "t": 103,
+    "regime": "on-call",
+    "category": "promo",
+    "oracle_action_scoring_only": "ARCHIVE",
+    "methods": {
+      "Base": {
+        "action": "LATER",
+        "feedback": {
+          "action_taken": "LATER",
+          "channel": "digest_delivered",
+          "outcome": "IGNORED_DIGEST",
+          "delay_minutes": 90,
+          "reward": -0.16
+        },
+        "teacher_rollout": "ARCHIVE"
+      },
+      "ICL": {
+        "action": "LATER",
+        "feedback": {
+          "action_taken": "LATER",
+          "channel": "digest_delivered",
+          "outcome": "IGNORED_DIGEST",
+          "delay_minutes": 90,
+          "reward": -0.16
+        },
+        "teacher_rollout": "ARCHIVE"
+      },
+      "RAG": {
+        "action": "LATER",
+        "feedback": {
+          "action_taken": "LATER",
+          "channel": "digest_delivered",
+          "outcome": "OPENED_DIGEST",
+          "delay_minutes": 90,
+          "reward": 0.48
+        },
+        "teacher_rollout": "ARCHIVE"
+      },
+      "Online-SFT": {
+        "action": "LATER",
+        "feedback": {
+          "action_taken": "LATER",
+          "channel": "digest_delivered",
+          "outcome": "IGNORED_DIGEST",
+          "delay_minutes": 90,
+          "reward": -0.16
+        },
+        "teacher_rollout": "INTERRUPT"
+      },
+      "Online-SDFT": {
+        "action": "ARCHIVE",
+        "feedback": {
+          "action_taken": "ARCHIVE",
+          "channel": "no_notification_sent",
+          "outcome": "NO_OBSERVATION",
+          "delay_minutes": 240,
+          "reward": 0.0
+        },
+        "teacher_rollout": "ARCHIVE"
+      }
+    }
+  },
+  {
+    "seed": 0,
+    "t": 105,
+    "regime": "on-call",
+    "category": "monitoring",
+    "oracle_action_scoring_only": "INTERRUPT",
+    "methods": {
+      "Base": {
+        "action": "LATER",
+        "feedback": {
+          "action_taken": "LATER",
+          "channel": "digest_delivered",
+          "outcome": "IGNORED_DIGEST",
+          "delay_minutes": 90,
+          "reward": -0.2889
+        },
+        "teacher_rollout": "INTERRUPT"
+      },
+      "ICL": {
+        "action": "LATER",
+        "feedback": {
+          "action_taken": "LATER",
+          "channel": "digest_delivered",
+          "outcome": "IGNORED_DIGEST",
+          "delay_minutes": 90,
+          "reward": -0.2889
+        },
+        "teacher_rollout": "ARCHIVE"
+      },
+      "RAG": {
+        "action": "LATER",
+        "feedback": {
+          "action_taken": "LATER",
+          "channel": "digest_delivered",
+          "outcome": "OPENED_DIGEST",
+          "delay_minutes": 90,
+          "reward": 0.3511
+        },
+        "teacher_rollout": "INTERRUPT"
+      },
+      "Online-SFT": {
+        "action": "LATER",
+        "feedback": {
+          "action_taken": "LATER",
+          "channel": "digest_delivered",
+          "outcome": "IGNORED_DIGEST",
+          "delay_minutes": 90,
+          "reward": -0.2889
+        },
+        "teacher_rollout": "INTERRUPT"
+      },
+      "Online-SDFT": {
+        "action": "INTERRUPT",
+        "feedback": {
+          "action_taken": "INTERRUPT",
+          "channel": "push_delivered",
+          "outcome": "OPENED_PUSH",
+          "delay_minutes": 0,
+          "reward": 0.6843
+        },
+        "teacher_rollout": "INTERRUPT"
+      }
+    }
+  },
+  {
+    "seed": 0,
     "t": 110,
     "regime": "on-call",
     "category": "promo",
@@ -316,198 +508,6 @@
           "reward": 0.0
         },
         "teacher_rollout": "LATER"
-      }
-    }
-  },
-  {
-    "seed": 0,
-    "t": 112,
-    "regime": "on-call",
-    "category": "social",
-    "oracle_action_scoring_only": "ARCHIVE",
-    "methods": {
-      "Base": {
-        "action": "LATER",
-        "feedback": {
-          "action_taken": "LATER",
-          "channel": "digest_delivered",
-          "outcome": "IGNORED_DIGEST",
-          "delay_minutes": 90,
-          "reward": -0.1654
-        },
-        "teacher_rollout": "INTERRUPT"
-      },
-      "ICL": {
-        "action": "LATER",
-        "feedback": {
-          "action_taken": "LATER",
-          "channel": "digest_delivered",
-          "outcome": "OPENED_DIGEST",
-          "delay_minutes": 90,
-          "reward": 0.4746
-        },
-        "teacher_rollout": "INTERRUPT"
-      },
-      "RAG": {
-        "action": "LATER",
-        "feedback": {
-          "action_taken": "LATER",
-          "channel": "digest_delivered",
-          "outcome": "OPENED_DIGEST",
-          "delay_minutes": 90,
-          "reward": 0.4746
-        },
-        "teacher_rollout": "LATER"
-      },
-      "Online-SFT": {
-        "action": "LATER",
-        "feedback": {
-          "action_taken": "LATER",
-          "channel": "digest_delivered",
-          "outcome": "OPENED_DIGEST",
-          "delay_minutes": 90,
-          "reward": 0.4746
-        },
-        "teacher_rollout": "INTERRUPT"
-      },
-      "Online-SDFT": {
-        "action": "ARCHIVE",
-        "feedback": {
-          "action_taken": "ARCHIVE",
-          "channel": "no_notification_sent",
-          "outcome": "NO_OBSERVATION",
-          "delay_minutes": 240,
-          "reward": 0.0
-        },
-        "teacher_rollout": "ARCHIVE"
-      }
-    }
-  },
-  {
-    "seed": 0,
-    "t": 113,
-    "regime": "on-call",
-    "category": "monitoring",
-    "oracle_action_scoring_only": "INTERRUPT",
-    "methods": {
-      "Base": {
-        "action": "LATER",
-        "feedback": {
-          "action_taken": "LATER",
-          "channel": "digest_delivered",
-          "outcome": "IGNORED_DIGEST",
-          "delay_minutes": 90,
-          "reward": -0.3215
-        },
-        "teacher_rollout": "LATER"
-      },
-      "ICL": {
-        "action": "LATER",
-        "feedback": {
-          "action_taken": "LATER",
-          "channel": "digest_delivered",
-          "outcome": "IGNORED_DIGEST",
-          "delay_minutes": 90,
-          "reward": -0.3215
-        },
-        "teacher_rollout": "ARCHIVE"
-      },
-      "RAG": {
-        "action": "LATER",
-        "feedback": {
-          "action_taken": "LATER",
-          "channel": "digest_delivered",
-          "outcome": "IGNORED_DIGEST",
-          "delay_minutes": 90,
-          "reward": -0.3215
-        },
-        "teacher_rollout": "INTERRUPT"
-      },
-      "Online-SFT": {
-        "action": "LATER",
-        "feedback": {
-          "action_taken": "LATER",
-          "channel": "digest_delivered",
-          "outcome": "OPENED_DIGEST",
-          "delay_minutes": 90,
-          "reward": 0.3185
-        },
-        "teacher_rollout": "INTERRUPT"
-      },
-      "Online-SDFT": {
-        "action": "INTERRUPT",
-        "feedback": {
-          "action_taken": "INTERRUPT",
-          "channel": "push_delivered",
-          "outcome": "OPENED_PUSH",
-          "delay_minutes": 0,
-          "reward": 0.7155
-        },
-        "teacher_rollout": "INTERRUPT"
-      }
-    }
-  },
-  {
-    "seed": 0,
-    "t": 117,
-    "regime": "on-call",
-    "category": "social",
-    "oracle_action_scoring_only": "ARCHIVE",
-    "methods": {
-      "Base": {
-        "action": "LATER",
-        "feedback": {
-          "action_taken": "LATER",
-          "channel": "digest_delivered",
-          "outcome": "IGNORED_DIGEST",
-          "delay_minutes": 90,
-          "reward": -0.16
-        },
-        "teacher_rollout": "ARCHIVE"
-      },
-      "ICL": {
-        "action": "LATER",
-        "feedback": {
-          "action_taken": "LATER",
-          "channel": "digest_delivered",
-          "outcome": "OPENED_DIGEST",
-          "delay_minutes": 90,
-          "reward": 0.48
-        },
-        "teacher_rollout": "ARCHIVE"
-      },
-      "RAG": {
-        "action": "LATER",
-        "feedback": {
-          "action_taken": "LATER",
-          "channel": "digest_delivered",
-          "outcome": "IGNORED_DIGEST",
-          "delay_minutes": 90,
-          "reward": -0.16
-        },
-        "teacher_rollout": "ARCHIVE"
-      },
-      "Online-SFT": {
-        "action": "INTERRUPT",
-        "feedback": {
-          "action_taken": "INTERRUPT",
-          "channel": "push_delivered",
-          "outcome": "IGNORED_PUSH",
-          "delay_minutes": 0,
-          "reward": -0.8822
-        },
-        "teacher_rollout": "ARCHIVE"
-      },
-      "Online-SDFT": {
-        "action": "ARCHIVE",
-        "feedback": {
-          "action_taken": "ARCHIVE",
-          "channel": "no_notification_sent",
-          "outcome": "ORGANIC_INBOX_OPEN",
-          "delay_minutes": 240,
-          "reward": 0.16
-        },
-        "teacher_rollout": "ARCHIVE"
       }
     }
   }

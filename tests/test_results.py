@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from online_sdft.config import METHODS, MODEL_ID
+from online_sdft.config import ICL_K, METHODS, MODEL_ID, RAG_K
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,6 +20,8 @@ def test_published_run_uses_liquid_lfm_and_online_protocol():
         "teacher rollouts only; oracle scoring only"
     )
     assert config["online_batch_size"] <= 4
+    assert config["icl_examples"] == ICL_K
+    assert config["rag_examples"] == RAG_K == ICL_K
 
 
 def test_online_sdft_beats_every_published_baseline_on_both_metrics():

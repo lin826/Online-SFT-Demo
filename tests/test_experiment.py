@@ -15,14 +15,16 @@ class OrderedPolicy:
     def __init__(self, calls):
         self.calls = calls
         self.updates = []
+        self.example_counts = []
 
     def start_run(self, learning_rate):
         self.learning_rate = learning_rate
         self.updates.clear()
 
     def probs(self, context, examples=None):
-        del context, examples
+        del context
         self.calls.append("act")
+        self.example_counts.append(len(examples or []))
         return np.array([0.2, 0.6, 0.2])
 
     def update(self, batch):
@@ -122,3 +124,16 @@ def test_frozen_baselines_never_update_weights():
     for method in METHODS[:3]:
         _, policy, _, _ = run_fast_method(method)
         assert not policy.updates
+
+
+def test_icl_and_rag_prompts_contain_strictly_past_records_only():
+    for method in ("ICL", "RAG"):
+        _, policy, _, _ = run_fast_method(method)
+        assert policy.example_counts[:3] == [0, 1, 2]
+        assert all(
+            count <= step - 1
+            for step, count in enumerate(
+                policy.example_counts,
+                start=1,
+            )
+        )

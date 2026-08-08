@@ -799,10 +799,10 @@ Mean over 3 paired streams:
 | Method | Online accuracy | Cumulative regret ↓ |
 | --- | ---: | ---: |
 | Base | 37.08% ± 3.30 | 81.50 ± 2.24 |
-| ICL | 37.08% ± 1.70 | 81.65 ± 0.87 |
-| RAG | 38.61% ± 0.98 | 81.63 ± 6.75 |
-| Online-SFT | 39.17% ± 5.10 | 102.82 ± 10.98 |
-| **Online-SDFT** | **62.50% ± 5.66** | **43.33 ± 4.81** |
+| ICL | 37.50% ± 1.25 | 81.10 ± 1.37 |
+| RAG | 38.75% ± 0.47 | 79.94 ± 7.38 |
+| Online-SFT | 41.25% ± 2.49 | 99.02 ± 13.52 |
+| **Online-SDFT** | **63.75% ± 1.25** | **37.43 ± 0.96** |
 
 **Short conclusion:** the full soft teacher distribution is a substantially better online target than one sampled hard teacher action. Stop here if you only need the result."""
         ),
@@ -882,8 +882,8 @@ There is no train/test split. The stream drifts from weekday to on-call to off-h
 | Method | Online adaptation |
 | --- | --- |
 | Base | Frozen Liquid LFM2.5-230M |
-| ICL | Recent sampled teacher actions in the LFM prompt |
-| RAG | Similar past sampled teacher actions in the LFM prompt |
+| ICL | Last 12 sampled teacher actions in the frozen LFM prompt |
+| RAG | 12 nearest past sampled teacher actions in the frozen LFM prompt |
 | Online-SFT | LoRA update from one sampled teacher action |
 | **Online-SDFT** | LoRA update from the teacher's full soft distribution |
 
@@ -894,7 +894,22 @@ benchmark uses an explicit stochastic simulator policy as its auditable
 post-decision teacher."""
         ),
         nbf.v4.new_markdown_cell(
-            """### 5.2 Online-SFT versus Online-SDFT
+            """### 5.2 ICL and RAG implementation contract
+
+Both baselines append a demonstration only **after** the live action and teacher
+response. The demonstration is `(visible notification, sampled teacher route)`;
+it contains no evaluator label. ICL selects the latest 12 records. RAG searches
+all past records and selects 12 nearest contexts using equal-weight similarity
+over visible category, regime, importance, deadline, affinity, and circular
+hour. Both receive the same prompt budget and keep LFM weights frozen.
+
+Demonstrations and the query use the same `notification: ...` / `route: ...`
+schema. RAG places its strongest match next to the query. We do not pretrain a
+learned retriever because that would add side labeled data; learning retrieval
+from past records would define another online-learning method."""
+        ),
+        nbf.v4.new_markdown_cell(
+            """### 5.3 Online-SFT versus Online-SDFT
 
 | | Online-SFT | Online-SDFT |
 | --- | --- | --- |

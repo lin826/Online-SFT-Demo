@@ -10,8 +10,8 @@ before committing.
 | Method | Adaptation mechanism |
 | --- | --- |
 | Base | Frozen Liquid LFM2.5-230M |
-| ICL | Recent sampled teacher actions enter the LFM prompt; weights stay frozen |
-| RAG | Similar past teacher actions enter the LFM prompt; weights stay frozen |
+| ICL | Last 12 sampled teacher actions enter the LFM prompt; weights stay frozen |
+| RAG | 12 nearest past teacher actions enter the LFM prompt; weights stay frozen |
 | Online-SFT | Updates a LoRA adapter from one sampled, one-hot teacher action |
 | **Online-SDFT** | Updates the same LoRA adapter from the teacher's complete soft action distribution |
 
@@ -44,6 +44,53 @@ The LLM is the deployed student. For a controlled, auditable benchmark, the
 privileged teacher is an explicit stochastic simulator policy rather than a
 second LLM. It sees permitted post-decision state and factual feedback, but not
 the evaluator's oracle action or utility vector.
+
+## ICL and RAG, exactly
+
+Both are genuine frozen-LFM baselines. After round `t` is over, they append the
+legal pair `(visible notification x_t, sampled teacher route y_t)` to memory.
+They never store the evaluator's best route. At round `t+1`, each selected pair
+is formatted exactly like the live query:
+
+```text
+example 1 notification: category=...; hour=...; ...
+example 1 route: B
+...
+current notification: category=...; hour=...; ...
+current route:
+```
+
+The next-token probabilities of `A/B/C` are the policy; neither baseline makes
+a gradient update. This is standard few-shot ICL: input-label demonstrations
+condition a frozen LM. Example selection matters substantially in ICL, so RAG
+uses nearest past demonstrations rather than an intentionally weak random
+sample ([Liu et al., 2022](https://aclanthology.org/2022.deelio-1.10/);
+[Rubin et al., 2022](https://aclanthology.org/2022.naacl-main.191/)).
+
+| Detail | ICL | RAG |
+| --- | --- | --- |
+| Search pool | Last 12 legal records | Every legal past record |
+| Selection | Recency | Top 12 nearest contexts |
+| Prompt budget | 12 examples | 12 examples |
+| Order | Oldest → newest | Weaker → stronger match, so the best is next to the query |
+| Parameters | Frozen | Frozen |
+
+RAG uses an equal-weight, Gower-style score over the six fields visible in the
+notification: exact category match, exact regime match, proximity in
+importance/deadline/affinity, and circular proximity in hour. This is a strong
+zero-training retriever for mixed structured data: 23:30 is close to 00:30,
+and a constant bias feature cannot swamp useful distinctions. It uses no hidden
+`z`, feedback from the current round, future record, reward, or oracle utility.
+We do not pretrain a learned retriever because that would add side labeled data
+absent from the declared protocol. Training one from past records would instead
+define a separate online-learning method, not this frozen RAG baseline.
+
+Authoritative implementation: [`LiquidLLMPolicy.render_prompt`](../online_sdft/methods.py),
+[`ICLAgent`](../online_sdft/methods.py),
+[`mixed_context_similarity`](../online_sdft/methods.py), and
+[`RAGAgent`](../online_sdft/methods.py). Their causal insertion point is
+[`run_method`](../online_sdft/experiment.py): act first, append memory only
+after execution and teacher feedback.
 
 ## Online-SDFT contract
 

@@ -15,6 +15,7 @@ import numpy as np
 from .config import (
     ACTION_CODES,
     ACTIONS,
+    CATEGORIES,
     ICL_K,
     LORA_ALPHA,
     LORA_R,
@@ -150,13 +151,19 @@ class LiquidLLMPolicy:
         lines = []
         for index, row in enumerate(examples or [], start=1):
             code = ACTION_CODES[row["teacher_action"]]
-            lines.append(f"past{index}: {row['context']} => teacher={code}")
+            # Keep the demonstration and query schemas identical. This makes
+            # the frozen policy's job genuine few-shot classification rather
+            # than asking it to translate `teacher=A` into `route: A`.
+            lines.append(
+                f"example {index} notification: {row['context']}"
+            )
+            lines.append(f"example {index} route: {code}")
         if lines:
             lines.append(
-                "Use these as personalization evidence, not universal rules."
+                "Treat these as user-specific evidence, not universal rules."
             )
-        lines.append(f"current: {context}")
-        lines.append("route:")
+        lines.append(f"current notification: {context}")
+        lines.append("current route:")
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": "\n".join(lines)},
@@ -247,6 +254,53 @@ class TeacherRecord:
         }
 
 
+def mixed_context_similarity(
+    query: StudentObservation,
+    candidate: StudentObservation,
+) -> float:
+    """Gower-style similarity over the six student-visible fields.
+
+    Category and regime use exact match; importance, deadline, and affinity
+    use bounded absolute distance; hour uses circular distance. Equal weights
+    avoid an opaque, benchmark-tuned metric and the constant/derived entries
+    in ``StudentObservation.features`` are deliberately ignored.
+    """
+    category_count = len(CATEGORIES)
+    query_features = query.features
+    candidate_features = candidate.features
+
+    category_similarity = float(
+        np.argmax(query_features[:category_count])
+        == np.argmax(candidate_features[:category_count])
+    )
+    continuous_similarities = [
+        1.0 - abs(float(query_features[index] - candidate_features[index]))
+        for index in range(category_count, category_count + 3)
+    ]
+
+    query_clock = query_features[category_count + 3 : category_count + 5]
+    candidate_clock = candidate_features[
+        category_count + 3 : category_count + 5
+    ]
+    clock_cosine = float(
+        np.clip(np.dot(query_clock, candidate_clock), -1.0, 1.0)
+    )
+    hour_similarity = 1.0 - float(np.arccos(clock_cosine) / np.pi)
+
+    query_regime = int(round(2 * query_features[category_count + 5]))
+    candidate_regime = int(
+        round(2 * candidate_features[category_count + 5])
+    )
+    regime_similarity = float(query_regime == candidate_regime)
+    components = [
+        category_similarity,
+        *continuous_similarities,
+        hour_similarity,
+        regime_similarity,
+    ]
+    return float(np.mean(components))
+
+
 class OnlineAgent:
     """Base class for one method on one chronological stream."""
 
@@ -320,7 +374,7 @@ class BaseAgent(OnlineAgent):
 
 
 class ICLAgent(OnlineAgent):
-    """Frozen LFM prompted with the most recent teacher rollouts."""
+    """Frozen LFM prompted with the latest causal teacher demonstrations."""
 
     name = "ICL"
 
@@ -336,7 +390,7 @@ class ICLAgent(OnlineAgent):
 
 
 class RAGAgent(OnlineAgent):
-    """Frozen LFM prompted with similar causal teacher records."""
+    """Frozen LFM prompted with nearest causal teacher demonstrations."""
 
     name = "RAG"
 
@@ -348,27 +402,24 @@ class RAGAgent(OnlineAgent):
             return []
         similarities = [
             (
-                float(
-                    np.dot(observation.features, record.observation.features)
-                    / (
-                        np.linalg.norm(observation.features)
-                        * np.linalg.norm(record.observation.features)
-                        + 1e-9
-                    )
+                mixed_context_similarity(
+                    observation,
+                    record.observation,
                 ),
+                index,
                 record,
             )
-            for record in self.memory
+            for index, record in enumerate(self.memory)
         ]
-        closest = [
-            record
-            for _, record in sorted(
-                similarities,
-                key=lambda pair: pair[0],
-                reverse=True,
-            )[:RAG_K]
-        ]
-        return [record.prompt_example() for record in closest]
+        closest = sorted(
+            similarities,
+            key=lambda item: (item[0], item[1]),
+            reverse=True,
+        )[:RAG_K]
+        # Put the best match closest to the current query. For equal scores,
+        # the newest record is also closest to the query in the prompt.
+        closest.sort(key=lambda item: (item[0], item[1]))
+        return [record.prompt_example() for _, _, record in closest]
 
 
 class OnlineSFTAgent(OnlineAgent):

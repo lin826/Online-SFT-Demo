@@ -34,7 +34,8 @@ EXPLORATION_EPSILON = 0.06
 REPLAY_SIZE = 24
 ONLINE_BATCH_SIZE = 4
 ICL_K = 12
-RAG_K = 5
+# Give retrieval the same prompt budget as the recency-only ICL baseline.
+RAG_K = ICL_K
 
 MODEL_ID = "LiquidAI/LFM2.5-230M"
 LORA_R = 4

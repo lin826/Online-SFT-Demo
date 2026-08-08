@@ -192,8 +192,8 @@ highest LFM action-token probability and use 6% uniform exploration:
 | Method | Adaptation mechanism |
 | --- | --- |
 | Base | Frozen Liquid LFM2.5-230M |
-| ICL | Last 12 teacher samples enter the LFM prompt |
-| RAG | Five similar teacher samples enter the LFM prompt |
+| ICL | Last 12 teacher samples enter the frozen LFM prompt |
+| RAG | 12 nearest past teacher samples enter the frozen LFM prompt |
 | Online-SFT | LoRA updates from one sampled hard teacher action |
 | Online-SDFT | LoRA updates from the full teacher distribution |
 
@@ -210,9 +210,9 @@ The hidden utility vector is available to the evaluator because this is a simula
 
 *Higher is better on the left; lower is better on the right. Error bars are 95% confidence intervals over paired streams.*
 
-Online-SDFT reaches **62.50% ± 5.66** online accuracy with **43.33 ± 4.81**
+Online-SDFT reaches **63.75% ± 1.25** online accuracy with **37.43 ± 0.96**
 cumulative regret. RAG, the strongest frozen baseline by accuracy, reaches
-**38.61% ± 0.98** accuracy and **81.63 ± 6.75** regret.
+**38.75% ± 0.47** accuracy and **79.94 ± 7.38** regret.
 
 Relative to Online-SFT, keeping the complete teacher distribution adds
 **23.33 accuracy points** and removes **59.49 regret units** on average.

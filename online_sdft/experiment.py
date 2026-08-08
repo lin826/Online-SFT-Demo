@@ -19,6 +19,7 @@ from .config import (
     ACTIONS,
     EXPLORATION_EPSILON,
     FIG,
+    ICL_K,
     LORA_ALPHA,
     LORA_R,
     METHODS,
@@ -26,6 +27,7 @@ from .config import (
     ONLINE_BATCH_SIZE,
     OUT,
     PHASE_LENGTH,
+    RAG_K,
     REGIMES,
     REPLAY_SIZE,
     SDFT_LR,
@@ -201,6 +203,11 @@ def experiment_config(
         ),
         "replay_size": REPLAY_SIZE,
         "online_batch_size": ONLINE_BATCH_SIZE,
+        "icl_examples": ICL_K,
+        "rag_examples": RAG_K,
+        "rag_similarity": (
+            "equal-weight mixed visible fields; circular hour"
+        ),
         "sft_lr": SFT_LR,
         "sdft_lr": SDFT_LR,
         "teacher_temperature": TEACHER_TEMPERATURE,
