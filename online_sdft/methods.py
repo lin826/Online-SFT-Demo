@@ -68,6 +68,14 @@ class LiquidLLMPolicy:
                 else "cpu"
             )
         self.device = torch.device(device)
+        # T4-class Colab GPUs are optimized for FP16 and do not accelerate
+        # BF16. Keep CPU/MPS in FP32 so the published CPU protocol is
+        # unchanged, while CUDA runs use tensor cores for practical reruns.
+        self.model_dtype = (
+            torch.float16
+            if self.device.type == "cuda"
+            else torch.float32
+        )
         torch.manual_seed(0)
 
         self.tokenizer = AutoTokenizer.from_pretrained(
@@ -81,7 +89,7 @@ class LiquidLLMPolicy:
         base = AutoModelForCausalLM.from_pretrained(
             model_id,
             local_files_only=local_files_only,
-            dtype=torch.float32,
+            dtype=self.model_dtype,
         )
         adapter_config = LoraConfig(
             r=LORA_R,
@@ -170,7 +178,9 @@ class LiquidLLMPolicy:
             key: value.to(self.device)
             for key, value in encoded.items()
         }
-        logits = self.model(**encoded).logits[:, -1, :]
+        # Compute normalization and the distillation loss in FP32 even when
+        # the frozen CUDA backbone runs in FP16.
+        logits = self.model(**encoded).logits[:, -1, :].float()
         action_ids = self.torch.tensor(
             self.action_token_ids,
             device=self.device,

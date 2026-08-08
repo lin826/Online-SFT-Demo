@@ -8,6 +8,10 @@ the same drifting stream—there is no train/test split.
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/lin826/Online-SFT-Demo/blob/main/online_sdft_bandit_demo.ipynb)
 
+For a full rerun, select **Runtime → Change runtime type → T4 GPU** in Colab,
+then execute Sections 6.1–6.4. The setup cell preserves Colab's CUDA PyTorch and
+removes its incompatible, unused `torchao` package before loading PEFT.
+
 ![Online-SDFT causal interaction](figures/online_sdft_process.gif)
 
 ## Headline result

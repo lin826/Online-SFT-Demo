@@ -447,7 +447,62 @@ play_notification_round(SCENARIO_ID, MY_ACTION)
 
 
 INSTALL_DEPS = r'''
-%pip install -q "transformers>=5.0" "peft>=0.15" "torch>=2.3" "numpy>=1.26" "matplotlib>=3.8" "Pillow>=10"
+import importlib.metadata as package_metadata
+import importlib.util
+import os
+import subprocess
+import sys
+
+
+# Colab currently preinstalls torchao 0.10.0 alongside a much newer PEFT.
+# TorchAO is optional for this unquantized LoRA experiment, and PEFT rejects
+# that stale version at import time. Removing it is safer than replacing
+# Colab's matched PyTorch/CUDA build with a different TorchAO/Torch pair.
+try:
+    torchao_version = package_metadata.version("torchao")
+except package_metadata.PackageNotFoundError:
+    torchao_version = None
+
+if torchao_version is not None:
+    print(f"Removing unused torchao {torchao_version} to avoid a PEFT conflict...")
+    subprocess.check_call(
+        [sys.executable, "-m", "pip", "uninstall", "-y", "torchao"]
+    )
+
+packages = [
+    "transformers==5.13.1",
+    "peft==0.19.1",
+    "numpy>=1.26,<3",
+    "matplotlib>=3.8,<4",
+    "Pillow>=10,<13",
+]
+if importlib.util.find_spec("torch") is None:
+    # Local Jupyter fallback. Colab already supplies a CUDA-matched PyTorch.
+    packages.append("torch>=2.3")
+
+subprocess.check_call(
+    [sys.executable, "-m", "pip", "install", "-q", *packages]
+)
+
+import peft
+import torch
+import transformers
+
+in_colab = bool(os.environ.get("COLAB_RELEASE_TAG"))
+if in_colab and not torch.cuda.is_available():
+    raise RuntimeError(
+        "Colab is using CPU. Choose Runtime > Change runtime type > T4 GPU, "
+        "then run this cell again."
+    )
+
+device_name = (
+    torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU/MPS"
+)
+print(
+    "Runtime ready | "
+    f"torch={torch.__version__} | transformers={transformers.__version__} | "
+    f"peft={peft.__version__} | device={device_name}"
+)
 '''.strip()
 
 
@@ -464,8 +519,14 @@ def run_experiment_in_memory(seeds=3):
     for seed in range(seeds):
         policy = LiquidLLMPolicy(model_id=MODEL_ID)
         if seed == 0:
-            print(f"Loaded {policy.model_id} on {policy.device}; "
-                  f"{policy.trainable_parameters:,} trainable LoRA parameters")
+            hardware = (
+                torch.cuda.get_device_name(0)
+                if policy.device.type == "cuda"
+                else str(policy.device)
+            )
+            print(f"Loaded {policy.model_id} on {hardware}; "
+                  f"{policy.trainable_parameters:,} trainable LoRA parameters",
+                  flush=True)
         stream = make_stream(seed)
         for method in METHODS:
             rollout_buffer = StringIO()
@@ -473,8 +534,15 @@ def run_experiment_in_memory(seeds=3):
             curve_writer = csv.DictWriter(curve_buffer, fieldnames=curve_fields,
                                           lineterminator="\n")
             curve_writer.writeheader()
-            metrics.append(run_method(seed, method, stream, policy,
-                                      rollout_buffer, curve_writer))
+            metric_row = run_method(seed, method, stream, policy,
+                                    rollout_buffer, curve_writer)
+            metrics.append(metric_row)
+            print(
+                f"seed {seed + 1}/{seeds} | {method:<11} | "
+                f"accuracy={metric_row['online_accuracy']:.3f} | "
+                f"regret={metric_row['cum_regret']:.2f}",
+                flush=True,
+            )
             rollout_buffer.seek(0)
             rollouts.extend(json.loads(line) for line in rollout_buffer)
             curve_buffer.seek(0)
@@ -485,6 +553,8 @@ def run_experiment_in_memory(seeds=3):
         gc.collect()
         if resolved_device == "mps":
             torch.mps.empty_cache()
+        elif resolved_device == "cuda":
+            torch.cuda.empty_cache()
 
     metric_names = [key for key in metrics[0] if key not in {"seed", "method"}]
     summary = {}
@@ -830,8 +900,10 @@ outputs."""
         nbf.v4.new_markdown_cell(
             """### 6.1 Install the LLM runtime
 
-This is the only network-dependent step. In Colab, a GPU runtime is fastest;
-CPU and Apple MPS also work."""
+In Colab, first choose **Runtime → Change runtime type → T4 GPU**. The setup
+cell keeps Colab's CUDA-matched PyTorch, removes its stale optional `torchao`
+package (unused here), pins the tested Transformers/PEFT versions, and prints
+the detected GPU. Local CPU and Apple MPS runs remain supported."""
         ),
         reader_code_cell(INSTALL_DEPS, "Install the Liquid LFM runtime"),
         nbf.v4.new_markdown_cell(
@@ -844,8 +916,8 @@ This long cell defines the stream, factual feedback, scoring oracle, teacher, fi
             """### 6.3 Run the paired streams
 
 All artifacts remain in memory: 3 seeds × 5 methods × 240 online decisions.
-This executes real LFM inference and online LoRA updates, so it can take tens of
-minutes depending on the runtime."""
+This executes real LFM inference and online LoRA updates. The cell prints one
+line after every method so a long GPU run never looks stalled."""
         ),
         reader_code_cell(RUNNER, "Run the complete paired experiment in memory"),
         nbf.v4.new_markdown_cell("### 6.4 Confirm the recomputed metrics"),

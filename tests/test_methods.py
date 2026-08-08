@@ -81,3 +81,11 @@ def test_methods_module_has_no_reward_or_oracle_implementation():
     assert "oracle_utilities" not in source
     assert "factual_feedback" not in source
     assert "teacher_distribution(" not in source
+
+
+def test_liquid_policy_uses_fp16_only_on_cuda_and_fp32_logits():
+    source = getsource(LiquidLLMPolicy)
+    assert 'self.device.type == "cuda"' in source
+    assert "torch.float16" in source
+    assert "else torch.float32" in source
+    assert ".logits[:, -1, :].float()" in source
