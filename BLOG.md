@@ -70,7 +70,17 @@ Keeping a learner close to the user offers four practical benefits: private inte
 
 The trade-off is compute. Phones have tight memory, energy, and thermal budgets, and training is more expensive than inference. Research such as [TinyTL](https://arxiv.org/abs/2007.11622) studies this bottleneck. A realistic edge learner therefore needs to be small—perhaps a compact language model or a parameter-efficient adapter—and update in very small batches.
 
-This demo goes smaller still: its student is a linear softmax policy rather than an LLM. That makes every information boundary easy to audit. It tests the learning mechanism, not phone-scale LLM performance.
+This demo uses
+[`LiquidAI/LFM2.5-230M`](https://huggingface.co/LiquidAI/LFM2.5-230M),
+a compact causal language model designed for on-device use. Its base weights stay
+frozen; Online-SFT and Online-SDFT update a rank-4 LoRA adapter with 172,032
+trainable parameters. This is an actual LLM experiment, although it is still a
+simulator—not a measurement of phone battery, latency, or thermal behavior.
+
+The Liquid model is the deployed student. The post-decision teacher in this
+controlled experiment is an explicit stochastic simulator policy, chosen so
+that readers can audit exactly which facts it uses. It never receives the
+evaluator's preferred action or hidden utility vector.
 
 ## 3. Why the familiar alternatives struggle
 
@@ -116,7 +126,8 @@ Each round has four steps:
 1. **Student acts.** The small student sees the current context and its past. It does not see future feedback or privileged post-decision information.
 2. **One route executes.** The environment creates an outcome only for that route.
 3. **Teacher interprets.** Afterward, the teacher combines context, the chosen action, factual feedback, and permitted post-decision signals.
-4. **Student updates.** One fresh record plus at most three older records update the student for the next request.
+4. **Student updates.** One fresh record plus at most three recent records
+   update the student for the next request.
 
 For the late-night receipt, an illustrative teacher target might be:
 
@@ -136,18 +147,21 @@ The complete loop is:
 initialize student and a short replay buffer
 
 for each request x_t, in arrival order:
-    a_t = sample(student(actions | x_t))         # no privileged z_t
+    a_t = epsilon_greedy(student(actions | x_t)) # no privileged z_t
     score a_t before learning
 
     z_t = execute_only(a_t)                      # one factual outcome
     q_t = teacher(actions | x_t, a_t, z_t)       # soft target, not oracle y*
 
     replay.append((x_t, q_t))
-    batch = newest_record + up_to_3_older_records
+    batch = newest_record + up_to_3_recent_records
     update student once                          # helps t+1, never t
 ```
 
-This order is enforced in [run_method](bandit_experiment.py#L257-L326), and the post-decision distribution is produced by [teacher_policy](bandit_experiment.py#L180-L205).
+This order is enforced in [run_method](bandit_experiment.py), the student's
+next-token policy and LoRA update live in
+[LiquidLLMPolicy](bandit_experiment.py), and the post-decision distribution is
+produced by [teacher_policy](bandit_experiment.py).
 
 ### How is this different from ordinary SDFT?
 
@@ -164,21 +178,23 @@ Online-SFT provides the closest controlled comparison. It uses the same teacher 
 
 Notification routing is a useful test bed because it is personal, preferences drift, interruption has a real cost, and each route reveals different feedback.
 
-The simulator runs **20 paired streams**. Each stream contains **240 requests** across three consecutive regimes:
+The reported LLM experiment runs **3 paired streams**. Each stream contains
+**240 requests** across three consecutive regimes:
 
 ```text
 weekday (80) → on-call (80) → off-hours (80)
 ```
 
-All five methods see the same streams and use 6% exploration:
+All five methods see the same streams. They normally execute the route with the
+highest LFM action-token probability and use 6% uniform exploration:
 
 | Method | Adaptation mechanism |
 | --- | --- |
-| Base | Frozen generic policy |
-| ICL | Last 12 sampled teacher actions stay in context |
-| RAG | Five similar past contexts vote |
-| Online-SFT | Tiny weight updates from one sampled hard teacher action |
-| Online-SDFT | Tiny weight updates from the full teacher distribution |
+| Base | Frozen Liquid LFM2.5-230M |
+| ICL | Last 12 teacher samples enter the LFM prompt |
+| RAG | Five similar teacher samples enter the LFM prompt |
+| Online-SFT | LoRA updates from one sampled hard teacher action |
+| Online-SDFT | LoRA updates from the full teacher distribution |
 
 The metrics are deliberately online:
 
@@ -193,9 +209,14 @@ The hidden utility vector is available to the evaluator because this is a simula
 
 *Higher is better on the left; lower is better on the right. Error bars are 95% confidence intervals over paired streams.*
 
-Online-SDFT reaches **74.77% ± 1.24** online accuracy with **18.65 ± 1.28** cumulative regret. The next-best method, Online-SFT, reaches **61.79% ± 2.51** accuracy and **40.17 ± 4.51** regret.
+Online-SDFT reaches **62.50% ± 5.66** online accuracy with **43.33 ± 4.81**
+cumulative regret. RAG, the strongest frozen baseline by accuracy, reaches
+**38.61% ± 0.98** accuracy and **81.63 ± 6.75** regret.
 
-Relative to Online-SFT, keeping the complete teacher distribution adds **12.98 accuracy points** and removes **21.52 regret units** on average. SDFT wins paired online accuracy in all 20 streams and regret in 19 of 20.
+Relative to Online-SFT, keeping the complete teacher distribution adds
+**23.33 accuracy points** and removes **59.49 regret units** on average.
+Online-SDFT wins both metrics in all three paired streams. Three seeds make this
+a preliminary demonstration, not a production-scale statistical claim.
 
 ### Result: the advantage grows during the stream
 
@@ -203,15 +224,23 @@ Relative to Online-SFT, keeping the complete teacher distribution adds **12.98 a
 
 *The dashed lines mark the shifts from weekday to on-call and from on-call to off-hours.*
 
-The blue SDFT curve rises as interactions accumulate while its regret grows much more slowly. Its phase accuracy moves from **68.38%** during weekday requests to **77.94%** on call and **78.00%** off hours. These are not held-out test segments: each point records performance while the model is still adapting.
+The blue SDFT curve rises as interactions accumulate while its regret grows much
+more slowly. Its phase accuracy moves from **49.58%** during weekday requests to
+**60.83%** on call and **77.08%** off hours. These are not held-out test
+segments: each point records performance while the model is still adapting.
 
 ### Three decisions from the learning trace
 
-**Step 87 — an on-call receipt.** Base and RAG interrupt; ICL and Online-SFT defer. Online-SDFT archives. Because it chose archive, its factual result is **NO_OBSERVATION**—not a fictional push click.
+**Step 94 — an on-call social item.** Every comparison method defers it;
+Online-SDFT archives it. Its factual result is **ORGANIC_INBOX_OPEN**—not a
+fictional push or digest click.
 
-**Step 150 — another on-call receipt.** SDFT again archives after accumulating soft evidence across similar contexts. The hard-history methods still interrupt or defer.
+**Step 113 — an on-call monitoring incident.** Every comparison method defers
+it; Online-SDFT interrupts, and the factual outcome is **OPENED_PUSH**.
 
-**Step 162 — an off-hours social message.** SDFT moves the message to **LATER**; every comparison method interrupts. The regime has changed, and the online learner changes with it.
+**Step 117 — another on-call social item.** Online-SDFT archives and observes an
+organic inbox open. Online-SFT interrupts and observes **IGNORED_PUSH**; the
+frozen methods defer.
 
 These examples show the intended learning trajectory: not memorizing a universal “archive receipts” rule, but accumulating uncertain evidence and adjusting as context changes.
 
@@ -228,7 +257,10 @@ It does **not** yet show that:
 - the simulator’s utility weights match a production notification product;
 - exact counterfactual regret can be measured from ordinary deployment logs.
 
-A production study would replace the linear student with a small model or adapter, measure memory/latency/energy, validate the teacher against consented interactions, test longer preference shifts and forgetting, and use randomized logging or controlled experiments for evaluation.
+A production study would measure LFM memory, latency, and energy on target phones;
+validate the teacher against consented interactions; test longer preference
+shifts and forgetting; and use randomized logging or controlled experiments for
+evaluation.
 
 The causal contract should remain:
 

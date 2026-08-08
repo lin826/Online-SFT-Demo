@@ -6,10 +6,13 @@
 
 | Item | Value |
 | --- | --- |
-| Streams | 20 paired random seeds |
+| Streams | 3 paired random seeds |
 | Decisions per stream | 240, in arrival order |
 | Regimes | Weekday → on-call → off-hours |
-| Exploration | 6%, included in all metrics |
+| Serving policy | LFM argmax with 6% uniform exploration |
+| Student | LiquidAI/LFM2.5-230M |
+| Trainable state | Rank-4 LoRA, 172,032 parameters |
+| Canonical runtime | CPU, one isolated process per seed |
 | Methods | Base, ICL, RAG, Online-SFT, Online-SDFT |
 | Primary metrics | Prequential online accuracy and cumulative regret |
 
@@ -21,17 +24,19 @@ Mean `±` 95% confidence interval:
 
 | Method | Online accuracy | Cumulative regret ↓ |
 | --- | ---: | ---: |
-| Base | 52.17% ± 1.23 | 71.17 ± 2.93 |
-| ICL | 45.75% ± 1.05 | 78.38 ± 3.39 |
-| RAG | 53.15% ± 1.62 | 56.60 ± 4.39 |
-| Online-SFT | 61.79% ± 2.51 | 40.17 ± 4.51 |
-| **Online-SDFT** | **74.77% ± 1.24** | **18.65 ± 1.28** |
+| Base | 37.08% ± 3.30 | 81.50 ± 2.24 |
+| ICL | 37.08% ± 1.70 | 81.65 ± 0.87 |
+| RAG | 38.61% ± 0.98 | 81.63 ± 6.75 |
+| Online-SFT | 39.17% ± 5.10 | 102.82 ± 10.98 |
+| **Online-SDFT** | **62.50% ± 5.66** | **43.33 ± 4.81** |
 
 ![Aggregate comparison](../figures/bandit_accuracy.png)
 
 ![Online learning curves](../figures/bandit_learning_curves.png)
 
-Online-SDFT improves both objectives on the same streams. The result concerns performance **during adaptation**, not held-out accuracy after training.
+Online-SDFT improves both objectives on every paired stream. With only three
+seeds, the confidence intervals are preliminary; the result concerns
+performance **during adaptation**, not held-out accuracy after training.
 
 ## Reproduce
 
@@ -41,7 +46,10 @@ python -m venv .venv
 .venv/bin/python run.py
 ```
 
-The [self-contained notebook](../online_sdft_bandit_demo.ipynb) embeds the simulator, methods, experiment runner, animation, plots, and audit. It reads no repository artifacts at runtime.
+The [self-contained notebook](../online_sdft_bandit_demo.ipynb) embeds the
+simulator, methods, experiment runner, animation, plots, and audit. It reads no
+repository artifacts at runtime; its setup cell installs the runtime and
+downloads the [Liquid model](https://huggingface.co/LiquidAI/LFM2.5-230M).
 
 [Open in Colab](https://colab.research.google.com/github/lin826/Online-SFT-Demo/blob/main/online_sdft_bandit_demo.ipynb)
 

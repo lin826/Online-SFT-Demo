@@ -31,7 +31,12 @@ Let `I` = importance, `D` = deadline pressure, `F` = affinity, `B` = latent busy
 
 These coefficients encode three product assumptions: urgency can justify interruption, busyness can outweigh ordinary relevance, and archiving should require low value. Their relative scale lets a strong interruption cost offset a routine relevance benefit.
 
-They are **transparent simulation assumptions, not production estimates**. The resulting scoring-best action mix across 20 streams is nontrivial: 34% `INTERRUPT`, 38% `LATER`, and 28% `ARCHIVE`. Absolute utility units are arbitrary—multiplying all coefficients by a constant would rescale regret without changing the preferred action. Comparisons are therefore meaningful only within this fixed benchmark.
+They are **transparent simulation assumptions, not production estimates**. The
+resulting scoring-best action mix across the three canonical streams is
+nontrivial: 33.2% `INTERRUPT`, 37.5% `LATER`, and 29.3% `ARCHIVE`.
+Absolute utility units are arbitrary—multiplying all coefficients by a constant
+would rescale regret without changing the preferred action. Comparisons are
+therefore meaningful only within this fixed benchmark.
 
 ## Factual reward used by the teacher
 
@@ -48,7 +53,7 @@ This factual reward affects future teacher supervision; it does **not** enter re
 ## Exact ordering in code
 
 ```text
-a_t = sample(student(x_t, past))
+a_t = epsilon_greedy(student(x_t, past), epsilon=0.06)
 u_t = oracle_utilities(hidden_simulator_state)   # evaluator only
 best_t = argmax(u_t)
 step_regret = u_t[best_t] - u_t[a_t]             # score is frozen
@@ -58,9 +63,15 @@ q_t = teacher(x_t, a_t, z_t)
 update_for_t_plus_1(q_t)
 ```
 
-This ordering is implemented by [`oracle_utilities`](../bandit_experiment.py#L141-L152), [`factual_feedback`](../bandit_experiment.py#L155-L177), and [`run_method`](../bandit_experiment.py#L272-L326).
+This ordering is implemented by [`oracle_utilities`](../bandit_experiment.py),
+[`factual_feedback`](../bandit_experiment.py), and
+[`run_method`](../bandit_experiment.py). The LFM action distribution and LoRA
+update are implemented by [`LiquidLLMPolicy`](../bandit_experiment.py).
 
-For each method, the reported cumulative regret is the mean final `R_240` across 20 paired streams; confidence intervals use `1.96 × sample_std / sqrt(20)`. Every cold-start and exploration action remains included.
+For each method, the reported cumulative regret is the mean final `R_240`
+across three paired streams; confidence intervals use
+`1.96 × sample_std / sqrt(3)`. Every cold-start and exploration action remains
+included.
 
 ## Production interpretation
 

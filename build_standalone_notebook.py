@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 from pathlib import Path
 
 import nbformat as nbf
@@ -206,7 +207,7 @@ def _draw_teacher(draw, box, intensity):
         fill = PALETTE["teal"] if index == 0 else PALETTE["blue"]
         draw.rounded_rectangle((left, y1 + 255, left + 28, y1 + 285), radius=6,
                                fill=_blend(fill, PALETTE["bg"], intensity))
-    _center(draw, ((x1 + x2) / 2, y1 + 310), "fresh + up to 3 past",
+    _center(draw, ((x1 + x2) / 2, y1 + 310), "fresh + up to 3 recent",
             FONTS["small"], _blend(PALETTE["slate"], PALETTE["bg"], intensity))
     _center(draw, ((x1 + x2) / 2, y1 + 335), "updates t+1 only",
             FONTS["small"], _blend(PALETTE["teal"], PALETTE["bg"], intensity))
@@ -250,7 +251,7 @@ def _draw_frame(progress):
         dot_x = centers[-1][0]
     draw.ellipse((dot_x - 7, 121, dot_x + 7, 135), fill=PALETTE["blue"])
 
-    titles = ("1 CONTEXT", "2 STUDENT", "3 COMMIT + SCORE",
+    titles = ("1 CONTEXT", "2 LIQUID LFM", "3 COMMIT + SCORE",
               "4 FEEDBACK", "5 TEACH + UPDATE")
     renderers = (_draw_context, _draw_student, _draw_commit, _draw_feedback, _draw_teacher)
     for index, box in enumerate(cards):
@@ -270,7 +271,7 @@ def _draw_frame(progress):
 
     status = (
         "Context x_t arrives; no current feedback exists.",
-        "The student samples its own action from π_t(.|x_t).",
+        "Liquid LFM selects its own action from π_t(.|x_t).",
         "The selected action and regret are frozen before feedback.",
         "Only the selected action produces factual feedback.",
         "The teacher's soft target updates a tiny batch for t+1.",
@@ -418,16 +419,26 @@ play_notification_round(SCENARIO_ID, MY_ACTION)
 '''.strip()
 
 
+INSTALL_DEPS = r'''
+%pip install -q "transformers>=5.0" "peft>=0.15" "torch>=2.3" "numpy>=1.26" "matplotlib>=3.8" "Pillow>=10"
+'''.strip()
+
+
 RUNNER = r'''
 from io import StringIO
+import torch
 
 
-def run_experiment_in_memory(seeds=20):
+def run_experiment_in_memory(seeds=3):
     curve_fields = ["seed", "method", "t", "phase", "regime", "step_correct",
                     "step_regret", "cum_accuracy", "cum_regret"]
     metrics, rollouts, curves = [], [], []
 
     for seed in range(seeds):
+        policy = LiquidLLMPolicy(model_id=MODEL_ID)
+        if seed == 0:
+            print(f"Loaded {policy.model_id} on {policy.device}; "
+                  f"{policy.trainable_parameters:,} trainable LoRA parameters")
         stream = make_stream(seed)
         for method in METHODS:
             rollout_buffer = StringIO()
@@ -435,12 +446,18 @@ def run_experiment_in_memory(seeds=20):
             curve_writer = csv.DictWriter(curve_buffer, fieldnames=curve_fields,
                                           lineterminator="\n")
             curve_writer.writeheader()
-            metrics.append(run_method(seed, method, stream,
+            metrics.append(run_method(seed, method, stream, policy,
                                       rollout_buffer, curve_writer))
             rollout_buffer.seek(0)
             rollouts.extend(json.loads(line) for line in rollout_buffer)
             curve_buffer.seek(0)
             curves.extend(csv.DictReader(curve_buffer))
+        resolved_device = str(policy.device)
+        policy.optimizer = None
+        del policy
+        gc.collect()
+        if resolved_device == "mps":
+            torch.mps.empty_cache()
 
     metric_names = [key for key in metrics[0] if key not in {"seed", "method"}]
     summary = {}
@@ -471,7 +488,7 @@ def run_experiment_in_memory(seeds=20):
     return metrics, rollouts, curves, summary, qualitative
 
 
-N_SEEDS = 20
+N_SEEDS = 3
 metrics, rollouts, curves, summary, qualitative = run_experiment_in_memory(N_SEEDS)
 print(f"Finished {N_SEEDS} paired streams × {len(METHODS)} methods × {STREAM_LENGTH} decisions")
 '''.strip()
@@ -542,7 +559,11 @@ for method in METHODS:
     ts = sorted(t for name, t in by_accuracy if name == method)
     acc = np.array([by_accuracy[(method, t)] for t in ts])
     mean_acc = np.array([values.mean() for values in acc]) * 100
-    ci_acc = np.array([1.96 * values.std(ddof=1) / np.sqrt(len(values)) for values in acc]) * 100
+    ci_acc = np.array([
+        0.0 if len(values) == 1 else
+        1.96 * values.std(ddof=1) / np.sqrt(len(values))
+        for values in acc
+    ]) * 100
     mean_regret = [np.mean(by_regret[(method, t)]) for t in ts]
     width = 2.8 if method == "Online-SDFT" else 1.5
     axes[0].plot(ts, mean_acc, color=colors[method], label=method, lw=width)
@@ -634,9 +655,13 @@ def markdown_cells() -> list:
     )
     return [
         nbf.v4.new_markdown_cell(
-            """# Learning when silence has no click: Online SDFT
+            """# Learning when silence has no click: Online SDFT with Liquid LFM
 
-This notebook is **fully self-contained**: no network, downloads, repository checkout, or input files are required.
+This notebook runs a real
+[`LiquidAI/LFM2.5-230M`](https://huggingface.co/LiquidAI/LFM2.5-230M)
+student. It is **repository-independent**: it contains the complete simulator,
+policies, and analysis and reads no repository files. Its setup cell downloads
+the `LiquidAI/LFM2.5-230M` checkpoint and Python packages on first use.
 
 ## Choose a reading path
 
@@ -655,15 +680,16 @@ This notebook is **fully self-contained**: no network, downloads, repository che
         nbf.v4.new_markdown_cell(
             """## 1. Results at a glance
 
-Every one of the 240 decisions counts, including cold start and exploration. Mean over 20 paired streams:
+Every one of the 240 decisions counts, including cold start and exploration.
+Mean over 3 paired streams:
 
 | Method | Online accuracy | Cumulative regret ↓ |
 | --- | ---: | ---: |
-| Base | 52.17% ± 1.23 | 71.17 ± 2.93 |
-| ICL | 45.75% ± 1.05 | 78.38 ± 3.39 |
-| RAG | 53.15% ± 1.62 | 56.60 ± 4.39 |
-| Online-SFT | 61.79% ± 2.51 | 40.17 ± 4.51 |
-| **Online-SDFT** | **74.77% ± 1.24** | **18.65 ± 1.28** |
+| Base | 37.08% ± 3.30 | 81.50 ± 2.24 |
+| ICL | 37.08% ± 1.70 | 81.65 ± 0.87 |
+| RAG | 38.61% ± 0.98 | 81.63 ± 6.75 |
+| Online-SFT | 39.17% ± 5.10 | 102.82 ± 10.98 |
+| **Online-SDFT** | **62.50% ± 5.66** | **43.33 ± 4.81** |
 
 **Short conclusion:** the full soft teacher distribution is a substantially better online target than one sampled hard teacher action. Stop here if you only need the result."""
         ),
@@ -742,13 +768,17 @@ There is no train/test split. The stream drifts from weekday to on-call to off-h
 
 | Method | Online adaptation |
 | --- | --- |
-| Base | Frozen generic policy |
-| ICL | Recent sampled teacher actions in context |
-| RAG | Similar past sampled teacher actions retrieved |
-| Online-SFT | Weight update from one sampled teacher action |
-| **Online-SDFT** | Weight update from the teacher's full soft distribution |
+| Base | Frozen Liquid LFM2.5-230M |
+| ICL | Recent sampled teacher actions in the LFM prompt |
+| RAG | Similar past sampled teacher actions in the LFM prompt |
+| Online-SFT | LoRA update from one sampled teacher action |
+| **Online-SDFT** | LoRA update from the teacher's full soft distribution |
 
-All methods act with the same 6% exploration and never receive the evaluator's preferred action."""
+All methods normally take the route with the highest LFM action-token
+probability, use the same 6% uniform exploration, and never receive the
+evaluator's preferred action. The LFM is the deployed student; the controlled
+benchmark uses an explicit stochastic simulator policy as its auditable
+post-decision teacher."""
         ),
         nbf.v4.new_markdown_cell(
             """### 5.2 Online-SFT versus Online-SDFT
@@ -758,28 +788,40 @@ All methods act with the same 6% exploration and never receive the evaluator's p
 | Student rollout | From `x_t`, without `z_t` | From `x_t`, without `z_t` |
 | Teacher timing | After factual feedback | After factual feedback |
 | Retained target | One sampled hard action | Full soft distribution `q_t` |
-| Online batch | Fresh + up to 3 past items | Fresh + up to 3 past items |
+| Online batch | Fresh + up to 3 recent | Fresh + up to 3 recent |
 
 Neither method trains on a ground-truth demonstration. SDFT preserves the teacher's relative preference over all routes instead of reducing it to one noisy draw."""
         ),
         nbf.v4.new_markdown_cell(
             """## 6. Reproduce the experiment (optional)
 
-The next three subsections contain the complete embedded implementation, execute 20 paired streams, and recompute the headline table. Skip to [Section 7](#7-inspect-the-metrics-optional) if you only want the saved outputs."""
+The next four subsections install the LLM runtime, contain the complete embedded
+implementation, execute 3 paired streams, and recompute the headline table.
+Skip to [Section 7](#7-inspect-the-metrics-optional) if you only want the saved
+outputs."""
         ),
         nbf.v4.new_markdown_cell(
-            """### 6.1 Load the embedded simulator and policies
+            """### 6.1 Install the LLM runtime
+
+This is the only network-dependent step. In Colab, a GPU runtime is fastest;
+CPU and Apple MPS also work."""
+        ),
+        reader_code_cell(INSTALL_DEPS, "Install the Liquid LFM runtime"),
+        nbf.v4.new_markdown_cell(
+            """### 6.2 Load the embedded simulator and policies
 
 This long cell defines the stream, factual feedback, scoring oracle, teacher, five methods, and online update loop. It reads no external file."""
         ),
         reader_code_cell(embedded_core(), "Optional: embedded simulator and method implementation"),
         nbf.v4.new_markdown_cell(
-            """### 6.2 Run the paired streams
+            """### 6.3 Run the paired streams
 
-All artifacts remain in memory: 20 seeds × 5 methods × 240 online decisions."""
+All artifacts remain in memory: 3 seeds × 5 methods × 240 online decisions.
+This executes real LFM inference and online LoRA updates, so it can take tens of
+minutes depending on the runtime."""
         ),
         reader_code_cell(RUNNER, "Run the complete paired experiment in memory"),
-        nbf.v4.new_markdown_cell("### 6.3 Confirm the recomputed metrics"),
+        nbf.v4.new_markdown_cell("### 6.4 Confirm the recomputed metrics"),
         reader_code_cell(RESULTS, "Display the recomputed result table"),
         nbf.v4.new_markdown_cell(
             """## 7. Inspect the metrics (optional)
@@ -818,7 +860,13 @@ These examples are selected after all rollouts finish. They show later decisions
         nbf.v4.new_markdown_cell(
             """## 10. Takeaway
 
-This is not batch training followed by a clean test. Every method pays for cold-start, exploration, and adaptation errors as they happen. Online-SFT keeps one noisy teacher draw; Online-SDFT keeps the teacher's complete relative preference. On identical streams, that soft signal reaches **74.8% online accuracy and 18.7 cumulative regret**, versus **61.8% and 40.2** for Online-SFT."""
+This is not batch training followed by a clean test. Every method pays for
+cold-start, exploration, and adaptation errors as they happen. Online-SFT keeps
+one noisy teacher draw; Online-SDFT keeps the teacher's complete relative
+preference. On three identical paired streams, that soft signal reaches
+**62.5% online accuracy and 43.3 cumulative regret**, versus **39.2% and 102.8**
+for Online-SFT. The sample is deliberately small, so treat it as a reproducible
+demonstration rather than a production-scale claim."""
         ),
     ]
 
@@ -827,7 +875,8 @@ def main() -> None:
     GIF_PATH.parent.mkdir(parents=True, exist_ok=True)
     namespace = {}
     exec(GIF_FUNCTIONS, namespace)
-    GIF_PATH.write_bytes(namespace["make_online_sdft_gif"]())
+    gif_bytes = namespace["make_online_sdft_gif"]()
+    GIF_PATH.write_bytes(gif_bytes)
 
     notebook = nbf.v4.new_notebook(
         cells=markdown_cells(),
@@ -836,6 +885,19 @@ def main() -> None:
             "language_info": {"name": "python", "version": "3"},
         },
     )
+    # Keep the notebook standalone and make its key animation visible in GitHub
+    # before any cell is executed.
+    for cell in notebook.cells:
+        if cell.cell_type == "code" and "gif_bytes = make_online_sdft_gif()" in cell.source:
+            cell.outputs = [nbf.v4.new_output(
+                output_type="display_data",
+                data={
+                    "image/gif": base64.b64encode(gif_bytes).decode("ascii"),
+                    "text/plain": "<IPython.core.display.Image object>",
+                },
+                metadata={},
+            )]
+            break
     nbf.write(notebook, NOTEBOOK)
     print(f"wrote {NOTEBOOK}")
     print(f"wrote {GIF_PATH}")

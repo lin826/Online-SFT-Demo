@@ -1,9 +1,10 @@
-"""Fast, multi-seed contextual-bandit benchmark for online SDFT.
+"""Liquid LFM contextual-bandit benchmark for online SDFT.
 
-This experiment is intentionally model-agnostic and uses a small softmax policy
-as the on-device student. The privileged teacher sees post-decision telemetry z
-and emits a stochastic soft rollout distribution. No method trains on the
-simulator's oracle action or counterfactual outcomes.
+The deployed student is LiquidAI/LFM2.5-230M with a small LoRA adapter. It scores
+the three routes from next-token probabilities and generates every live action
+without post-decision telemetry. The privileged teacher sees factual feedback z
+and emits a stochastic soft distribution. No method trains on the simulator's
+oracle action or counterfactual outcomes.
 
 Outputs:
   outputs/bandit/rollouts.jsonl
@@ -17,14 +18,14 @@ Outputs:
 
 from __future__ import annotations
 
-import argparse
 import csv
+import gc
 import json
 import math
-import random
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -40,9 +41,24 @@ STREAM_LENGTH = PHASE_LENGTH * len(REGIMES)
 FEATURE_DIM = len(CATEGORIES) + 8
 EXPLORATION_EPSILON = 0.06
 REPLAY_SIZE = 24
-SFT_LR = 0.05
-SDFT_LR = 0.50
+ONLINE_BATCH_SIZE = 4
+MODEL_ID = "LiquidAI/LFM2.5-230M"
+ACTION_CODES = ("A", "B", "C")
+ICL_K = 12
+RAG_K = 5
+LORA_R = 4
+LORA_ALPHA = 8
+SFT_LR = 2e-4
+SDFT_LR = 3e-4
 TEACHER_TEMPERATURE = 0.95
+STUDENT_TEMPERATURE = 1.0
+
+SYSTEM_PROMPT = """You are an on-device notification router.
+Choose exactly one route and reply with only its code:
+A = INTERRUPT now
+B = LATER in a digest
+C = ARCHIVE without a notification
+Use the current notification and any past teacher examples. Do not add explanation."""
 
 
 def softmax(logits: np.ndarray, temperature: float = 1.0) -> np.ndarray:
@@ -200,68 +216,174 @@ def teacher_policy(event: Event, action: int, feedback: dict,
     return softmax(scores, temperature=TEACHER_TEMPERATURE)
 
 
-class LinearPolicy:
-    def __init__(self, initial: np.ndarray, lr: float = 0.075):
-        self.w = initial.copy()
-        self.lr = lr
-
-    def probs(self, x: np.ndarray) -> np.ndarray:
-        return softmax(self.w @ x)
-
-    def update(self, batch: list[tuple[np.ndarray, np.ndarray]]) -> None:
-        grad = np.zeros_like(self.w)
-        for x, target in batch:
-            p = self.probs(x)
-            grad += np.outer(p - target, x)
-        self.w -= self.lr * grad / len(batch)
+def context_text(event: Event) -> str:
+    """Render only student-visible x; privileged telemetry z is absent."""
+    return (
+        f"category={event.category}; hour={event.hour:.1f}; "
+        f"regime={REGIMES[event.phase]}; importance={event.importance:.2f}; "
+        f"deadline={event.deadline:.2f}; affinity={event.affinity:.2f}"
+    )
 
 
-def initial_policy(seed: int) -> np.ndarray:
-    """A weak generic notification prior shared identically by every method."""
-    rng = np.random.default_rng(seed + 90_000)
-    w = rng.normal(0, 0.025, (len(ACTIONS), FEATURE_DIM))
-    # Generic systems over-interrupt important/deadline items and archive promos.
-    w[0, len(CATEGORIES) + 0] = 0.55
-    w[0, len(CATEGORIES) + 1] = 0.42
-    w[1, len(CATEGORIES) + 2] = 0.30
-    w[2, CATEGORIES.index("promo")] = 0.65
-    w[2, len(CATEGORIES) + 0] = -0.28
-    return w
-
-
-def method_probs(method: str, policy: LinearPolicy, x: np.ndarray,
-                 memory: list[dict]) -> np.ndarray:
-    base = policy.probs(x)
-    if method in {"Base", "Online-SFT", "Online-SDFT"} or not memory:
-        return base
+def select_examples(method: str, event: Event, memory: list[dict]) -> list[dict]:
     if method == "ICL":
-        rows = memory[-12:]
-        vote = np.full(len(ACTIONS), 0.25)
-        for row in rows:
-            vote[row["teacher_action"]] += 1
-        vote /= vote.sum()
-        return 0.40 * base + 0.60 * vote
-    # RAG: hard teacher rollouts from semantically closest past notifications.
-    norms = [(float(np.dot(x, row["x"]) /
-                    (np.linalg.norm(x) * np.linalg.norm(row["x"]) + 1e-9)), row)
-             for row in memory]
-    rows = [row for _, row in sorted(norms, key=lambda pair: pair[0], reverse=True)[:5]]
-    vote = np.full(len(ACTIONS), 0.20)
-    for row in rows:
-        vote[row["teacher_action"]] += 1
-    vote /= vote.sum()
-    return 0.28 * base + 0.72 * vote
+        return memory[-ICL_K:]
+    if method != "RAG" or not memory:
+        return []
+    similarities = [
+        (float(np.dot(event.x, row["x"]) /
+               (np.linalg.norm(event.x) * np.linalg.norm(row["x"]) + 1e-9)), row)
+        for row in memory
+    ]
+    return [row for _, row in sorted(
+        similarities, key=lambda pair: pair[0], reverse=True
+    )[:RAG_K]]
 
 
-def run_method(seed: int, method: str, stream: list[Event], rollout_writer,
-               curve_writer) -> dict:
+class LiquidLLMPolicy:
+    """LFM2.5 student whose A/B/C next-token logits define the route policy."""
+
+    def __init__(self, model_id: str = MODEL_ID, device: str = "auto",
+                 local_files_only: bool = False):
+        import torch
+        from peft import LoraConfig, get_peft_model
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+
+        self.torch = torch
+        self.model_id = model_id
+        if device == "auto":
+            device = ("cuda" if torch.cuda.is_available() else
+                      "mps" if torch.backends.mps.is_available() else "cpu")
+        self.device = torch.device(device)
+        torch.manual_seed(0)
+
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            model_id, local_files_only=local_files_only
+        )
+        self.tokenizer.padding_side = "left"
+        if self.tokenizer.pad_token_id is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+
+        base = AutoModelForCausalLM.from_pretrained(
+            model_id, local_files_only=local_files_only, dtype=torch.float32
+        )
+        config = LoraConfig(
+            r=LORA_R,
+            lora_alpha=LORA_ALPHA,
+            lora_dropout=0.0,
+            target_modules=r".*self_attn\.(q_proj|k_proj|v_proj|out_proj)$",
+            bias="none",
+            task_type="CAUSAL_LM",
+        )
+        self.model = get_peft_model(base, config).to(self.device)
+        self.model.config.use_cache = False
+        self.action_token_ids = []
+        for code in ACTION_CODES:
+            token_ids = self.tokenizer.encode(code, add_special_tokens=False)
+            if len(token_ids) != 1:
+                raise ValueError(f"action code {code!r} is not one token: {token_ids}")
+            self.action_token_ids.append(token_ids[0])
+        self._initial_adapter = {
+            name: parameter.detach().cpu().clone()
+            for name, parameter in self.model.named_parameters()
+            if parameter.requires_grad
+        }
+        self.optimizer: Any | None = None
+
+    @property
+    def trainable_parameters(self) -> int:
+        return sum(parameter.numel() for parameter in self.model.parameters()
+                   if parameter.requires_grad)
+
+    def start_run(self, learning_rate: float | None) -> None:
+        """Reset LoRA so every method and random seed starts identically."""
+        for name, parameter in self.model.named_parameters():
+            if parameter.requires_grad:
+                parameter.data.copy_(self._initial_adapter[name].to(self.device))
+        self.optimizer = None
+        if learning_rate is not None:
+            self.optimizer = self.torch.optim.AdamW(
+                (parameter for parameter in self.model.parameters()
+                 if parameter.requires_grad),
+                lr=learning_rate,
+            )
+
+    def render_prompt(self, context: str,
+                      examples: list[dict] | None = None) -> str:
+        lines = []
+        for index, row in enumerate(examples or [], start=1):
+            code = ACTION_CODES[row["teacher_action"]]
+            lines.append(f"past{index}: {row['context']} => teacher={code}")
+        if lines:
+            lines.append("Use these as personalization evidence, not universal rules.")
+        lines.append(f"current: {context}")
+        lines.append("route:")
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": "\n".join(lines)},
+        ]
+        return self.tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+
+    def _action_logits(self, prompts: list[str]):
+        encoded = self.tokenizer(
+            prompts, return_tensors="pt", padding=True, add_special_tokens=False
+        )
+        encoded = {key: value.to(self.device) for key, value in encoded.items()}
+        logits = self.model(**encoded).logits[:, -1, :]
+        action_ids = self.torch.tensor(self.action_token_ids, device=self.device)
+        return logits.index_select(-1, action_ids)
+
+    def probs(self, context: str,
+              examples: list[dict] | None = None) -> np.ndarray:
+        self.model.eval()
+        with self.torch.no_grad():
+            logits = self._action_logits([self.render_prompt(context, examples)])
+            probabilities = self.torch.softmax(
+                logits / STUDENT_TEMPERATURE, dim=-1
+            )[0]
+        return probabilities.float().cpu().numpy()
+
+    def update(self, batch: list[tuple[str, np.ndarray]]) -> float:
+        if self.optimizer is None:
+            raise RuntimeError("start_run must receive a learning rate before update")
+        self.model.train()
+        prompts = [self.render_prompt(context) for context, _ in batch]
+        targets = self.torch.tensor(
+            np.stack([target for _, target in batch]),
+            device=self.device,
+            dtype=self.torch.float32,
+        )
+        logits = self._action_logits(prompts)
+        loss = -(targets * self.torch.log_softmax(logits, dim=-1)).sum(-1).mean()
+        self.optimizer.zero_grad(set_to_none=True)
+        loss.backward()
+        self.torch.nn.utils.clip_grad_norm_(
+            (parameter for parameter in self.model.parameters()
+             if parameter.requires_grad),
+            max_norm=1.0,
+        )
+        self.optimizer.step()
+        return float(loss.detach().cpu())
+
+
+def method_probs(method: str, policy: LiquidLLMPolicy, event: Event,
+                 memory: list[dict]) -> np.ndarray:
+    examples = select_examples(method, event, memory)
+    return policy.probs(context_text(event), examples)
+
+
+def run_method(seed: int, method: str, stream: list[Event], policy: LiquidLLMPolicy,
+               rollout_writer, curve_writer) -> dict:
     rng = np.random.default_rng(seed * 100 + METHODS.index(method) * 13 + 5)
-    # Separate coarse sweeps selected stable online-learning rates for the soft
-    # and hard targets. SDFT supports the larger step because q is low variance.
-    lr = SDFT_LR if method == "Online-SDFT" else (SFT_LR if method == "Online-SFT" else 0.055)
-    policy = LinearPolicy(initial_policy(seed), lr=lr)
+    learning_rate = (
+        SDFT_LR if method == "Online-SDFT" else
+        SFT_LR if method == "Online-SFT" else None
+    )
+    policy.start_run(learning_rate)
     memory: list[dict] = []
-    replay: list[tuple[np.ndarray, np.ndarray]] = []
+    replay: list[tuple[str, np.ndarray]] = []
     cum_regret = 0.0
     cum_correct = 0
     phase_correct = Counter()
@@ -269,10 +391,13 @@ def run_method(seed: int, method: str, stream: list[Event], rollout_writer,
     phase_regret = Counter()
 
     for t, event in enumerate(stream, start=1):
-        probs = method_probs(method, policy, event.x, memory)
+        probs = method_probs(method, policy, event, memory)
+        # Standard epsilon-greedy serving: normally execute the LFM's own top
+        # route; use the declared epsilon only for explicit exploration.
         greedy = one_hot(int(np.argmax(probs)), len(ACTIONS))
         behavior = ((1 - EXPLORATION_EPSILON) * greedy
                     + EXPLORATION_EPSILON / len(ACTIONS))
+        behavior /= behavior.sum()
         action = int(rng.choice(len(ACTIONS), p=behavior))
         # Prequential score: freeze and score the action before feedback exists.
         utilities = oracle_utilities(event)
@@ -294,6 +419,7 @@ def run_method(seed: int, method: str, stream: list[Event], rollout_writer,
                   "event_id": event.event_id, "phase": event.phase,
                   "regime": REGIMES[event.phase], "category": event.category,
                   "student_probs": dict(zip(ACTIONS, map(float, probs))),
+                  "behavior_probs": dict(zip(ACTIONS, map(float, behavior))),
                   "action": ACTIONS[action], "feedback": feedback,
                   "teacher_probs": dict(zip(ACTIONS, map(float, teacher_probs))),
                   "teacher_rollout": ACTIONS[teacher_action],
@@ -301,21 +427,26 @@ def run_method(seed: int, method: str, stream: list[Event], rollout_writer,
                   "correct_online": correct, "step_regret": step_regret,
                   "cum_regret": cum_regret, "cum_accuracy": cum_correct / t}
         rollout_writer.write(json.dumps(record) + "\n")
-        memory.append({"x": event.x.copy(), "teacher_action": teacher_action,
+        visible_context = context_text(event)
+        memory.append({"context": visible_context, "x": event.x.copy(),
+                       "teacher_action": teacher_action,
                        "feedback": feedback})
 
         if method == "Online-SFT":
             target = one_hot(teacher_action, len(ACTIONS))
-            replay.append((event.x.copy(), target))
+            replay.append((visible_context, target))
         elif method == "Online-SDFT":
-            replay.append((event.x.copy(), teacher_probs.copy()))
+            replay.append((visible_context, teacher_probs.copy()))
         if method in {"Online-SFT", "Online-SDFT"}:
             replay = replay[-REPLAY_SIZE:]
-            # Small online batch: fresh item plus up to three recent rollouts.
+            # Small online batch: the fresh factual interaction plus up to
+            # three recent records limits forgetting without batch training.
             indices = [len(replay) - 1]
             if len(replay) > 1:
                 indices += rng.choice(len(replay) - 1,
-                                      size=min(3, len(replay) - 1), replace=False).tolist()
+                                      size=min(ONLINE_BATCH_SIZE - 1,
+                                               len(replay) - 1),
+                                      replace=False).tolist()
             policy.update([replay[i] for i in indices])
 
         curve_writer.writerow({"seed": seed, "method": method, "t": t,
@@ -335,16 +466,20 @@ def run_method(seed: int, method: str, stream: list[Event], rollout_writer,
 
 def mean_ci(values: list[float]) -> dict:
     a = np.asarray(values, dtype=float)
-    return {"mean": float(a.mean()), "std": float(a.std(ddof=1)),
-            "ci95": float(1.96 * a.std(ddof=1) / math.sqrt(len(a)))}
+    if len(a) == 1:
+        return {"mean": float(a[0]), "std": 0.0, "ci95": 0.0}
+    std = float(a.std(ddof=1))
+    return {"mean": float(a.mean()), "std": std,
+            "ci95": float(1.96 * std / math.sqrt(len(a)))}
 
 
-def write_figures(summary: dict, curves: list[dict]) -> None:
+def write_figures(summary: dict, curves: list[dict],
+                  figure_dir: Path = FIG) -> None:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    FIG.mkdir(parents=True, exist_ok=True)
+    figure_dir.mkdir(parents=True, exist_ok=True)
     colors = {"Base": "#9aa0a6", "ICL": "#e8710a", "RAG": "#d93025",
               "Online-SFT": "#7b3fa0", "Online-SDFT": "#1a73e8"}
 
@@ -369,7 +504,7 @@ def write_figures(summary: dict, curves: list[dict]) -> None:
                     ha="center", va="bottom", fontsize=8, fontweight="bold")
     fig.suptitle("Online notification routing · mean ± 95% CI", fontweight="bold")
     fig.tight_layout()
-    fig.savefig(FIG / "bandit_accuracy.png", dpi=170, bbox_inches="tight")
+    fig.savefig(figure_dir / "bandit_accuracy.png", dpi=170, bbox_inches="tight")
     plt.close(fig)
 
     by = defaultdict(list)
@@ -380,7 +515,10 @@ def write_figures(summary: dict, curves: list[dict]) -> None:
         ts = sorted(t for m, t in by if m == method)
         ys = np.array([by[(method, t)] for t in ts])
         mean = np.array([v.mean() for v in ys]) * 100
-        ci = np.array([1.96 * v.std(ddof=1) / math.sqrt(len(v)) for v in ys]) * 100
+        ci = np.array([
+            0.0 if len(v) == 1 else 1.96 * v.std(ddof=1) / math.sqrt(len(v))
+            for v in ys
+        ]) * 100
         axes[0].plot(ts, mean, color=colors[method], label=method,
                      lw=2.6 if method == "Online-SDFT" else 1.5)
         axes[0].fill_between(ts, mean-ci, mean+ci, color=colors[method], alpha=0.09)
@@ -405,27 +543,63 @@ def write_figures(summary: dict, curves: list[dict]) -> None:
                 ylabel="Cumulative regret")
     axes[1].grid(alpha=0.25)
     fig.tight_layout()
-    fig.savefig(FIG / "bandit_learning_curves.png", dpi=170, bbox_inches="tight")
+    fig.savefig(figure_dir / "bandit_learning_curves.png", dpi=170, bbox_inches="tight")
     plt.close(fig)
 
 
-def main(seeds: int = 20) -> None:
-    OUT.mkdir(parents=True, exist_ok=True)
-    FIG.mkdir(parents=True, exist_ok=True)
-    rollouts_path = OUT / "rollouts.jsonl"
-    curves_path = OUT / "learning_curves.csv"
-    metrics_path = OUT / "per_seed_metrics.csv"
+def main(seeds: int = 3, model_id: str = MODEL_ID, device: str = "auto",
+         local_files_only: bool = False, seed_start: int = 0,
+         output_dir: Path | None = None,
+         figure_dir: Path | None = None) -> None:
+    output_dir = output_dir or OUT
+    figure_dir = figure_dir or FIG
+    output_dir.mkdir(parents=True, exist_ok=True)
+    figure_dir.mkdir(parents=True, exist_ok=True)
+    print(f"loading Liquid student {model_id}", flush=True)
+    rollouts_path = output_dir / "rollouts.jsonl"
+    curves_path = output_dir / "learning_curves.csv"
+    metrics_path = output_dir / "per_seed_metrics.csv"
     curve_fields = ["seed", "method", "t", "phase", "regime", "step_correct",
                     "step_regret", "cum_accuracy", "cum_regret"]
     metrics = []
+    resolved_device = ""
+    trainable_parameters = 0
     with rollouts_path.open("w") as rollout_fh, curves_path.open("w", newline="") as curve_fh:
         curve_writer = csv.DictWriter(curve_fh, fieldnames=curve_fields, lineterminator="\n")
         curve_writer.writeheader()
-        for seed in range(seeds):
+        for seed_index, seed in enumerate(
+            range(seed_start, seed_start + seeds), start=1
+        ):
+            # Recreate the small model once per paired seed. This bounds
+            # accelerator allocator state during long MPS runs while every
+            # method within a seed still shares identical initial weights.
+            policy = LiquidLLMPolicy(
+                model_id=model_id, device=device,
+                local_files_only=local_files_only
+            )
+            resolved_device = str(policy.device)
+            trainable_parameters = policy.trainable_parameters
+            if seed_index == 1:
+                print(
+                    f"device={resolved_device} "
+                    f"trainable_lora={trainable_parameters:,}",
+                    flush=True,
+                )
             stream = make_stream(seed)
             for method in METHODS:
-                metrics.append(run_method(seed, method, stream, rollout_fh, curve_writer))
-            print(f"seed {seed + 1}/{seeds}", flush=True)
+                metrics.append(run_method(
+                    seed, method, stream, policy, rollout_fh, curve_writer
+                ))
+                print(
+                    f"seed {seed_index}/{seeds} (id={seed}) · {method}",
+                    flush=True,
+                )
+            policy.optimizer = None
+            del policy
+            gc.collect()
+            if resolved_device == "mps":
+                import torch
+                torch.mps.empty_cache()
 
     metric_fields = list(metrics[0])
     with metrics_path.open("w", newline="") as fh:
@@ -461,23 +635,41 @@ def main(seeds: int = 20) -> None:
                                             for m in METHODS}})
         if len(qualitative) >= 8:
             break
-    (OUT / "qualitative_examples.json").write_text(json.dumps(qualitative, indent=2) + "\n")
-    payload = {"config": {"seeds": seeds, "stream_length": STREAM_LENGTH,
-                           "phase_length": PHASE_LENGTH,
-                           "actions": ACTIONS, "methods": METHODS,
-                           "exploration_epsilon": EXPLORATION_EPSILON,
-                           "replay_size": REPLAY_SIZE,
-                           "sft_lr": SFT_LR, "sdft_lr": SDFT_LR,
-                           "teacher_temperature": TEACHER_TEMPERATURE,
-                           "evaluation": "prequential one-stream; predict then learn",
-                           "learning_signal": "teacher rollouts only; oracle scoring only"},
-               "summary": summary, "qualitative_examples": len(qualitative)}
-    (OUT / "summary.json").write_text(json.dumps(payload, indent=2) + "\n")
-    write_figures(summary, curves)
-    print("wrote experiment artifacts to", OUT)
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--seeds", type=int, default=20)
-    main(parser.parse_args().seeds)
+    (output_dir / "qualitative_examples.json").write_text(
+        json.dumps(qualitative, indent=2) + "\n"
+    )
+    payload = {
+        "config": {
+            "seeds": seeds,
+            "seed_start": seed_start,
+            "stream_length": STREAM_LENGTH,
+            "phase_length": PHASE_LENGTH,
+            "actions": ACTIONS,
+            "methods": METHODS,
+            "student_model": model_id,
+            "student_policy": "next-token A/B/C probabilities",
+            "adapter": "LoRA",
+            "lora_r": LORA_R,
+            "lora_alpha": LORA_ALPHA,
+            "trainable_parameters": trainable_parameters,
+            "device": resolved_device,
+            "exploration_epsilon": EXPLORATION_EPSILON,
+            "behavior_policy": (
+                "epsilon-greedy over LFM next-token probabilities"
+            ),
+            "replay_size": REPLAY_SIZE,
+            "online_batch_size": ONLINE_BATCH_SIZE,
+            "sft_lr": SFT_LR,
+            "sdft_lr": SDFT_LR,
+            "teacher_temperature": TEACHER_TEMPERATURE,
+            "evaluation": "prequential one-stream; predict then learn",
+            "learning_signal": "teacher rollouts only; oracle scoring only",
+        },
+        "summary": summary,
+        "qualitative_examples": len(qualitative),
+    }
+    (output_dir / "summary.json").write_text(
+        json.dumps(payload, indent=2) + "\n"
+    )
+    write_figures(summary, curves, figure_dir)
+    print("wrote experiment artifacts to", output_dir)

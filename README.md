@@ -1,6 +1,10 @@
 # Online SDFT for Notification Routing
 
-An online contextual-bandit demo for routing notifications as `INTERRUPT`, `LATER`, or `ARCHIVE`. The agent acts before feedback, learns only from the selected action's factual outcome, and is scored on the same drifting stream—there is no train/test split.
+An online contextual-bandit demo for routing notifications as `INTERRUPT`,
+`LATER`, or `ARCHIVE`. A real
+[LiquidAI LFM2.5-230M](https://huggingface.co/LiquidAI/LFM2.5-230M) student acts
+before feedback, learns from a simulated post-decision teacher, and is scored on
+the same drifting stream—there is no train/test split.
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/lin826/Online-SFT-Demo/blob/main/online_sdft_bandit_demo.ipynb)
 
@@ -8,15 +12,18 @@ An online contextual-bandit demo for routing notifications as `INTERRUPT`, `LATE
 
 ## Headline result
 
-Mean over 20 paired 240-event streams; `±` is a 95% confidence interval.
+Mean over 3 paired 240-event streams; `±` is a 95% confidence interval.
 
 | Method | Online accuracy | Cumulative regret ↓ |
 | --- | ---: | ---: |
-| Base | 52.17% ± 1.23 | 71.17 ± 2.93 |
-| ICL | 45.75% ± 1.05 | 78.38 ± 3.39 |
-| RAG | 53.15% ± 1.62 | 56.60 ± 4.39 |
-| Online-SFT | 61.79% ± 2.51 | 40.17 ± 4.51 |
-| **Online-SDFT** | **74.77% ± 1.24** | **18.65 ± 1.28** |
+| Base | 37.08% ± 3.30 | 81.50 ± 2.24 |
+| ICL | 37.08% ± 1.70 | 81.65 ± 0.87 |
+| RAG | 38.61% ± 0.98 | 81.63 ± 6.75 |
+| Online-SFT | 39.17% ± 5.10 | 102.82 ± 10.98 |
+| **Online-SDFT** | **62.50% ± 5.66** | **43.33 ± 4.81** |
+
+These preliminary results come from the real LFM student and replace the
+earlier linear-policy proxy.
 
 ## Documentation
 
@@ -45,5 +52,8 @@ python -m venv .venv
 .venv/bin/pip install -r requirements.txt
 .venv/bin/python run.py
 ```
+
+The first run downloads the Liquid model checkpoint from Hugging Face. Use
+`--device cpu`, `--device mps`, or `--device cuda` to select the runtime.
 
 [View the self-contained notebook on GitHub](online_sdft_bandit_demo.ipynb).

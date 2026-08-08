@@ -1,8 +1,9 @@
 import numpy as np
+from inspect import signature
 
 from bandit_experiment import (
-    ACTIONS, FEATURE_DIM, STREAM_LENGTH, factual_feedback, make_stream,
-    oracle_utilities, teacher_policy,
+    ACTIONS, FEATURE_DIM, MODEL_ID, STREAM_LENGTH, LiquidLLMPolicy, context_text,
+    factual_feedback, make_stream, oracle_utilities, teacher_policy,
 )
 
 
@@ -38,3 +39,15 @@ def test_oracle_is_scoring_only_utility_vector():
     # the policy update API as an argument.
     event = make_stream(2)[0]
     assert oracle_utilities(event).shape == (len(ACTIONS),)
+
+
+def test_llm_context_excludes_privileged_post_decision_state():
+    event = make_stream(3)[0]
+    prompt_context = context_text(event)
+    assert MODEL_ID == "LiquidAI/LFM2.5-230M"
+    assert "category=" in prompt_context
+    assert all(field not in prompt_context for field in (
+        "busy", "incident_on_call", "leisure_social", "manager_focus"
+    ))
+    assert "event" not in signature(LiquidLLMPolicy.render_prompt).parameters
+    assert "context" in signature(LiquidLLMPolicy.render_prompt).parameters

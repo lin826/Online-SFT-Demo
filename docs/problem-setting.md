@@ -4,7 +4,10 @@
 
 ## A contextual bandit, not labeled classification
 
-At round `t`, a context `x_t` arrives and the student samples a route from its current policy. The route is committed and scored before the environment reveals anything about the user's response.
+At round `t`, a context `x_t` arrives and the student ranks the routes. The
+serving policy takes its top route except for 6% uniform exploration. That route
+is committed and scored before the environment reveals anything about the
+user's response.
 
 ```text
 context → commit action → freeze score → execute action → observe feedback → update t+1
