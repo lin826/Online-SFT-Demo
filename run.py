@@ -3,7 +3,8 @@
 import argparse
 from pathlib import Path
 
-from bandit_experiment import MODEL_ID, main
+from online_sdft.config import MODEL_ID
+from online_sdft.experiment import main
 
 
 if __name__ == "__main__":

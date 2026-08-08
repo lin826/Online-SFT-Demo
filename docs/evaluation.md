@@ -63,10 +63,10 @@ q_t = teacher(x_t, a_t, z_t)
 update_for_t_plus_1(q_t)
 ```
 
-This ordering is implemented by [`oracle_utilities`](../bandit_experiment.py),
-[`factual_feedback`](../bandit_experiment.py), and
-[`run_method`](../bandit_experiment.py). The LFM action distribution and LoRA
-update are implemented by [`LiquidLLMPolicy`](../bandit_experiment.py).
+The simulator-only utilities and factual execution live in
+[`environment.py`](../online_sdft/environment.py), the chronological ordering
+is enforced in [`experiment.py`](../online_sdft/experiment.py), and LFM/LoRA
+updates live in [`methods.py`](../online_sdft/methods.py).
 
 For each method, the reported cumulative regret is the mean final `R_240`
 across three paired streams; confidence intervals use

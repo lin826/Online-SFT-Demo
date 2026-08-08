@@ -158,10 +158,11 @@ for each request x_t, in arrival order:
     update student once                          # helps t+1, never t
 ```
 
-This order is enforced in [run_method](bandit_experiment.py), the student's
-next-token policy and LoRA update live in
-[LiquidLLMPolicy](bandit_experiment.py), and the post-decision distribution is
-produced by [teacher_policy](bandit_experiment.py).
+The separation is explicit in code:
+[environment.py](online_sdft/environment.py) owns the simulated world and
+teacher, [methods.py](online_sdft/methods.py) owns the Liquid student and five
+algorithms, and [experiment.py](online_sdft/experiment.py) enforces the causal
+ordering.
 
 ### How is this different from ordinary SDFT?
 

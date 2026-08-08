@@ -14,22 +14,49 @@ GIF_PATH = ROOT / "figures" / "online_sdft_process.gif"
 
 
 def embedded_core() -> str:
-    """Copy the executable experiment core into a notebook cell at build time."""
-    source = (ROOT / "bandit_experiment.py").read_text()
-    source = source[source.index("from __future__ import annotations"):]
-    source = source[:source.index("\ndef write_figures")]
-    excluded = {
-        "import argparse",
-        "from pathlib import Path",
-    }
-    lines = []
-    for line in source.splitlines():
-        if line in excluded:
-            continue
-        if line.startswith(("ROOT = ", "OUT = ", "FIG = ")):
-            continue
-        lines.append(line)
-    return "\n".join(lines).strip() + "\n"
+    """Embed focused modules without any repository imports at runtime."""
+
+    def module_source(
+        relative_path: str,
+        end_marker: str | None = None,
+    ) -> str:
+        source = (ROOT / relative_path).read_text()
+        if end_marker is not None:
+            source = source[:source.index(end_marker)]
+        lines = []
+        skipping_relative_import = False
+        for line in source.splitlines():
+            if skipping_relative_import:
+                if ")" in line:
+                    skipping_relative_import = False
+                continue
+            if line == "from __future__ import annotations":
+                continue
+            if line == "from pathlib import Path":
+                continue
+            if line.startswith("from ."):
+                if "(" in line and ")" not in line:
+                    skipping_relative_import = True
+                continue
+            if line.startswith(("ROOT = ", "OUT = ", "FIG = ")):
+                continue
+            lines.append(line)
+        return "\n".join(lines).strip()
+
+    modules = [
+        module_source("online_sdft/config.py"),
+        module_source("online_sdft/environment.py"),
+        module_source("online_sdft/methods.py"),
+        module_source(
+            "online_sdft/experiment.py",
+            end_marker="\ndef experiment_config",
+        ),
+        module_source(
+            "online_sdft/reporting.py",
+            end_marker="\ndef summarize_metrics",
+        ),
+    ]
+    return "\n\n".join(modules) + "\n"
 
 
 GIF_FUNCTIONS = r'''

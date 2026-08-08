@@ -40,10 +40,13 @@ earlier linear-policy proxy.
 | Path | Purpose |
 | --- | --- |
 | [`run.py`](run.py) | The supported experiment entry point |
-| [`bandit_experiment.py`](bandit_experiment.py) | Simulator, five methods, online evaluation, and plots |
+| [`online_sdft/environment.py`](online_sdft/environment.py) | Stream simulation, factual feedback, rewards, and teacher |
+| [`online_sdft/methods.py`](online_sdft/methods.py) | Liquid LFM policy and the five compared methods |
+| [`online_sdft/experiment.py`](online_sdft/experiment.py) | Predict → score → execute → learn orchestration |
+| [`online_sdft/reporting.py`](online_sdft/reporting.py) | Metrics, qualitative examples, and figures |
 | [`online_sdft_bandit_demo.ipynb`](online_sdft_bandit_demo.ipynb) | Self-contained walkthrough and playable game |
 | [`build_standalone_notebook.py`](build_standalone_notebook.py) | Rebuilds the notebook and process GIF |
-| [`tests/test_bandit_experiment.py`](tests/test_bandit_experiment.py) | Causal-feedback invariants |
+| [`tests/`](tests) | Causal, method-boundary, and result invariants |
 
 ## Quick start
 

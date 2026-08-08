@@ -15,6 +15,18 @@ before committing.
 | Online-SFT | Updates a LoRA adapter from one sampled, one-hot teacher action |
 | **Online-SDFT** | Updates the same LoRA adapter from the teacher's complete soft action distribution |
 
+## Code boundaries
+
+| Module | Owns | Cannot do |
+| --- | --- | --- |
+| `environment.py` | Stream, hidden `z`, factual outcomes, reward, teacher, scoring utility | Update the LFM |
+| `methods.py` | Liquid policy, memory/retrieval, SFT/SDFT targets, LoRA update | Access `Event.z`, reward simulation, or oracle utilities |
+| `experiment.py` | Predict → score → execute → teach → update ordering | Define rewards or learning algorithms |
+| `reporting.py` | Aggregation, examples, figures | Affect any live action |
+
+The bridge gives each method a `StudentObservation(text, features)`, never the
+full simulator `Event`.
+
 ## What the LLM does
 
 The deployed policy is the actual
@@ -67,9 +79,10 @@ Both methods use the same post-decision teacher. Their only supervision differen
 
 SDFT does not train on ground-truth demonstrations. Its advantage comes from preserving the teacher's uncertainty and action ranking instead of reducing them to one noisy sampled action.
 
-The authoritative code is [`teacher_policy`](../bandit_experiment.py), the
-next-token policy and LoRA update in
-[`LiquidLLMPolicy`](../bandit_experiment.py), and the chronological update
-branch inside [`run_method`](../bandit_experiment.py).
+The authoritative code is deliberately separated:
+[`environment.py`](../online_sdft/environment.py) owns the privileged teacher,
+[`methods.py`](../online_sdft/methods.py) owns the LFM and all five agents, and
+[`experiment.py`](../online_sdft/experiment.py) owns the chronological
+interaction loop.
 
 See [Problem setting](problem-setting.md) for the causal order and [Results](results.md) for the comparison.
