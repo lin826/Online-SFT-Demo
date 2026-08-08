@@ -61,3 +61,17 @@ def test_colab_results_cell_is_self_checking():
     assert 'summary["Online-SDFT"]' in results
     assert 'row["online_accuracy"]["mean"] for row in baselines' in results
     assert 'row["cum_regret"]["mean"] for row in baselines' in results
+
+
+def test_notebook_contains_complete_trace_backed_icl_and_rag_prompts():
+    notebook = nbformat.read(NOTEBOOK, as_version=4)
+    markdown = "\n".join(
+        cell.source
+        for cell in notebook.cells
+        if cell.cell_type == "markdown"
+    )
+    assert "Complete ICL user prompt" in markdown
+    assert "Complete RAG user prompt" in markdown
+    assert "P(A/B/C) = (0.5127, 0.4041, 0.0832)" in markdown
+    assert "P(A/B/C) = (0.1182, 0.8136, 0.0682)" in markdown
+    assert "decision 148" in markdown

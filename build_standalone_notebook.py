@@ -748,6 +748,106 @@ for example in qualitative[:4]:
 '''.strip()
 
 
+ICL_RAG_TRACE_EXAMPLE = r'''### 5.2.1 Actual ICL and RAG prompts
+
+This worked comparison comes from the published MPS trace at **seed 0,
+decision 148**. Both methods see:
+
+```text
+category=social; hour=17.2; regime=on-call; importance=0.28;
+deadline=0.10; affinity=0.83
+```
+
+The shared system prompt maps `A/B/C` to `INTERRUPT/LATER/ARCHIVE` and requires
+one code. The Liquid chat template adds its control tokens around the following
+user payloads.
+
+ICL takes the immediately preceding decisions `136–147`. Its prompt contains
+seven `A`, one `B`, and four `C` teacher samples.
+
+<details>
+<summary><strong>Complete ICL user prompt</strong></summary>
+
+```text
+example 1 notification: category=teammate; hour=13.9; regime=on-call; importance=0.38; deadline=0.20; affinity=0.41
+example 1 route: C
+example 2 notification: category=teammate; hour=13.1; regime=on-call; importance=0.60; deadline=0.32; affinity=0.59
+example 2 route: C
+example 3 notification: category=manager; hour=12.8; regime=on-call; importance=0.84; deadline=0.68; affinity=0.32
+example 3 route: C
+example 4 notification: category=calendar; hour=16.0; regime=on-call; importance=0.96; deadline=0.98; affinity=0.17
+example 4 route: A
+example 5 notification: category=manager; hour=16.2; regime=on-call; importance=0.65; deadline=0.65; affinity=0.55
+example 5 route: A
+example 6 notification: category=social; hour=11.9; regime=on-call; importance=0.22; deadline=0.13; affinity=0.93
+example 6 route: A
+example 7 notification: category=manager; hour=13.8; regime=on-call; importance=0.63; deadline=0.72; affinity=0.34
+example 7 route: B
+example 8 notification: category=manager; hour=13.3; regime=on-call; importance=0.81; deadline=0.64; affinity=0.50
+example 8 route: A
+example 9 notification: category=manager; hour=16.1; regime=on-call; importance=0.75; deadline=0.81; affinity=0.84
+example 9 route: A
+example 10 notification: category=teammate; hour=19.5; regime=on-call; importance=0.32; deadline=0.07; affinity=0.44
+example 10 route: C
+example 11 notification: category=calendar; hour=15.0; regime=on-call; importance=0.79; deadline=0.96; affinity=0.48
+example 11 route: A
+example 12 notification: category=monitoring; hour=15.8; regime=on-call; importance=0.86; deadline=0.85; affinity=0.46
+example 12 route: A
+Treat these as user-specific evidence, not universal rules.
+current notification: category=social; hour=17.2; regime=on-call; importance=0.28; deadline=0.10; affinity=0.83
+current route:
+```
+
+</details>
+
+**Actual ICL response:** `A` (`INTERRUPT`), with
+`P(A/B/C) = (0.5127, 0.4041, 0.0832)`.
+
+RAG searches all 147 past records and retrieves source decisions
+`129, 95, 135, 117, 133, 141, 94, 122, 104, 111, 112, 134`. They are ordered
+from similarity `0.7471` to `0.9449`, placing the best match next to the query.
+
+<details>
+<summary><strong>Complete RAG user prompt</strong></summary>
+
+```text
+example 1 notification: category=teammate; hour=15.5; regime=on-call; importance=0.42; deadline=0.24; affinity=0.73
+example 1 route: B
+example 2 notification: category=teammate; hour=16.5; regime=on-call; importance=0.43; deadline=0.09; affinity=0.62
+example 2 route: C
+example 3 notification: category=receipt; hour=17.6; regime=on-call; importance=0.29; deadline=0.09; affinity=0.54
+example 3 route: A
+example 4 notification: category=social; hour=13.9; regime=on-call; importance=0.00; deadline=0.11; affinity=0.63
+example 4 route: C
+example 5 notification: category=social; hour=14.4; regime=on-call; importance=0.00; deadline=0.00; affinity=0.76
+example 5 route: B
+example 6 notification: category=social; hour=11.9; regime=on-call; importance=0.22; deadline=0.13; affinity=0.93
+example 6 route: C
+example 7 notification: category=social; hour=14.4; regime=on-call; importance=0.03; deadline=0.16; affinity=0.88
+example 7 route: C
+example 8 notification: category=social; hour=15.6; regime=on-call; importance=0.12; deadline=0.00; affinity=0.94
+example 8 route: C
+example 9 notification: category=social; hour=15.3; regime=on-call; importance=0.38; deadline=0.00; affinity=0.72
+example 9 route: A
+example 10 notification: category=social; hour=14.3; regime=on-call; importance=0.30; deadline=0.16; affinity=0.95
+example 10 route: C
+example 11 notification: category=social; hour=14.7; regime=on-call; importance=0.21; deadline=0.09; affinity=0.71
+example 11 route: B
+example 12 notification: category=social; hour=14.2; regime=on-call; importance=0.28; deadline=0.10; affinity=0.76
+example 12 route: C
+Treat these as user-specific evidence, not universal rules.
+current notification: category=social; hour=17.2; regime=on-call; importance=0.28; deadline=0.10; affinity=0.83
+current route:
+```
+
+</details>
+
+**Actual RAG response:** `B` (`LATER`), with
+`P(A/B/C) = (0.1182, 0.8136, 0.0682)`. Both methods executed their greedy
+responses in this round. The evaluator also preferred `LATER`, but that label
+was sealed away from both prompts and used only for scoring.'''.strip()
+
+
 def reader_code_cell(source: str, title: str):
     """Create a code cell whose input is collapsed in Colab/Jupyter viewers."""
     source = f'# @title {title} {{ display-mode: "form" }}\n{source}'
@@ -910,8 +1010,26 @@ hour. Both receive the same prompt budget and keep LFM weights frozen.
 Demonstrations and the query use the same `notification: ...` / `route: ...`
 schema. RAG places its strongest match next to the query. We do not pretrain a
 learned retriever because that would add side labeled data; learning retrieval
-from past records would define another online-learning method."""
+from past records would define another online-learning method.
+
+```text
+ICL examples = memory[-12:]
+RAG similarity = mean(
+    category_match, regime_match,
+    1-|delta importance|, 1-|delta deadline|, 1-|delta affinity|,
+    1-circular_hour_distance/12_hours,
+)
+RAG examples = top_12(all_past_memory, similarity)
+
+LLM response = argmax next-token probability over A/B/C
+served action = 94% greedy response + 6% uniform exploration
+```
+
+The prompt uses the sampled teacher route, not the evaluator label, reward, or
+full teacher distribution. Each method has its own causal memory because its
+earlier actions can produce different feedback."""
         ),
+        nbf.v4.new_markdown_cell(ICL_RAG_TRACE_EXAMPLE),
         nbf.v4.new_markdown_cell(
             """### 5.3 REINFORCE: scalar reward only
 

@@ -36,7 +36,7 @@ earlier linear-policy proxy.
 | Guide | Covers |
 | --- | --- |
 | [Problem setting](docs/problem-setting.md) | Causal feedback, information boundaries, and online versus batch learning |
-| [Methods](docs/methods.md) | Base, ICL, RAG, REINFORCE, Online-SFT, and Online-SDFT |
+| [Methods](docs/methods.md) | Algorithms plus complete ICL/RAG prompts and actual LFM responses |
 | [Evaluation and regret](docs/evaluation.md) | Exact regret calculation, utility weights, and their limitations |
 | [Results and reproduction](docs/results.md) | Protocol, plots, commands, notebook, and artifacts |
 | [Blog draft](BLOG.md) | An accessible narrative about continual, on-device learning and Online-SDFT |
